@@ -1,0 +1,4 @@
+numpy~=2.2.2
+scipy~=1.15.1
+raylib~=5.5.0.2
+astropy[recommended]
