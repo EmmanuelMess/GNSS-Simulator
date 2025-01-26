@@ -1,6 +1,6 @@
 from typing import List, Tuple
 
-from astropy.coordinates import SphericalRepresentation, CartesianRepresentation
+from astropy.coordinates import SphericalRepresentation
 from astropy.constants import R_earth
 import astropy.units as u
 import numpy as np
@@ -17,6 +17,7 @@ array3d = np.ndarray[(2,), np.float64]
 tau = np.pi * 2
 
 def getSatelliteAtAngle(lat, lon) -> array3d:
+    # TODO replace astropy with a generic spherical geometry library
     MEO = np.float64(20_200_000) * u.m + R_earth
     spherical = SphericalRepresentation(lat=lat, lon=lon, distance=MEO)
     cartesian = spherical.to_cartesian().get_xyz()
@@ -56,7 +57,16 @@ RECEIVER_CLOCK_BIAS = np.float64(1 * 1e-3)
 # From https://www.e-education.psu.edu/geog862/node/1716
 RECEIVER_CLOCK_WALK = np.float64(1 * 1e-6)
 
-SATELLITE_NOISE_STD = 0.0
+SATELLITE_NOISE_STD = np.float64(0.0)
+
+# This noise level does not affect the reciever, because it can correct for the noise
+NOISE_CORRECTION_LEVEL = np.float64(7) # dB
+# This noise level causes the receiver to lose the fix
+NOISE_FIX_LOSS_LEVEL = np.float64(40) # dB
+
+# Effect of noise in the range (NOISE_CORRECTION_LEVEL, NOISE_FIX_LOSS_LEVEL), in terms of the mean meter error of the
+# pseudorange
+NOISE_EFFECT_RATE = np.float64(5) / (NOISE_FIX_LOSS_LEVEL - NOISE_CORRECTION_LEVEL) # m / dB
 
 def toVector2(array: array3d) -> Vector2:
     return Vector2(array[0].item(), array[1].item())
@@ -73,6 +83,8 @@ def getGnssPositionTaylor(pseudorange, gnss_satelite_position_aproximation, gnss
     gnss_pseudorange_approximation = (np.linalg.norm(gnss_satelite_position_aproximation - gnss_position_aproximation, axis=1)
                                       + (gnss_satelite_time_bias_aproximation + gnss_receiver_clock_bias_approximation) * scipy.constants.c)
     gnss_position_error = np.inf
+
+    # TODO add satelite weighting
 
     while gnss_position_error > xtol:
         delta_gnss_pseudorange = pseudorange.copy() - gnss_pseudorange_approximation
@@ -100,6 +112,8 @@ def getGnssPositionScipy(pseudorange, gnss_satelite_position_aproximation, gnss_
     A linearization of the pseudorange error, via scipy.optimize.least_squares
     :return:
     """
+    # TODO add satelite weighting
+
     def fun(x):
         gnss_position_aproximation = x[:3]
         gnss_receiver_clock_bias_approximation = x[-1]
@@ -138,10 +152,25 @@ def getGnssPVT(rng, player_positions, delta, reciever_clock_bias) -> Tuple[array
     # From GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
     multipath_bias = 0
 
-    # Random noise
+    # Satelite dependent random noise
     # From GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
     epsilon = rng.normal(0.0, SATELLITE_NOISE_STD, (SATELLITE_NUMBER,))
-    pseudorange = range + bias_difference + tropospheric_delay + ionospheric_delay + multipath_bias + epsilon
+
+    # Noise from sources local to the antenna, helps to model interference
+    # Extrapolated from GNSS interference mitigation: A measurement and position domain assessment
+    jammer = 30 # dB
+    def correction(noiseLevel):
+        if noiseLevel <= NOISE_CORRECTION_LEVEL:
+            return 0
+        if NOISE_CORRECTION_LEVEL < noiseLevel < NOISE_FIX_LOSS_LEVEL:
+            return rng.normal(0.0, noiseLevel * NOISE_EFFECT_RATE)
+        if NOISE_FIX_LOSS_LEVEL <= noiseLevel:
+            print("Too much noise")
+            return None
+    localNoiseEffect = correction(jammer)
+    print(f"Noise: {localNoiseEffect}m")
+
+    pseudorange = range + bias_difference + tropospheric_delay + ionospheric_delay + multipath_bias + epsilon + localNoiseEffect
 
     # Computation of the satellite orbit, from ephimeris
     # Assume satelite position is known because ephimeris is transmitted during the first fix
