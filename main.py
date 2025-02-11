@@ -39,8 +39,6 @@ SATELLITE_POSITIONS = np.array([
     getSatelliteAtAngle(60 * u.deg, 60 * u.deg),
 ], dtype=np.float64)
 
-print(SATELLITE_POSITIONS)
-
 SATELLITE_CLOCK_BIAS = np.array([
     5 * 1e-6,
     -10 * 1e-6,
@@ -170,6 +168,7 @@ def getGnssPVT(rng, player_positions, delta, reciever_clock_bias) -> Tuple[array
     localNoiseEffect = correction(jammer)
     print(f"Noise: {localNoiseEffect}m")
 
+    # TODO discretize to the PRN precision
     pseudorange = range + bias_difference + tropospheric_delay + ionospheric_delay + multipath_bias + epsilon + localNoiseEffect
 
     # Computation of the satellite orbit, from ephimeris
@@ -188,7 +187,8 @@ def getGnssPVT(rng, player_positions, delta, reciever_clock_bias) -> Tuple[array
         np.ones((1, SATELLITE_NUMBER)).T),
         axis=1
     )
-    Q = np.linalg.inv(A.T @ A)
+    eps = np.eye(A.shape[1]) * 1e-15 # Prevent heavily broken satellite configurations from crashing the progarm
+    Q = np.linalg.inv(A.T @ A + eps)
     gdop = np.sqrt(np.sum([Q[0, 0], Q[1, 1], Q[2, 2], Q[3, 3]]))
     hdop = np.sqrt(np.sum([Q[0, 0], Q[1, 1]]))
     vdop = np.sqrt(Q[2, 2])
@@ -207,6 +207,11 @@ def getGnssPVT(rng, player_positions, delta, reciever_clock_bias) -> Tuple[array
 def main():
     width, height = 800, 450
     init_window(width, height, "Hello")
+
+    print("Satelite positions")
+    print(SATELLITE_POSITIONS)
+    print("Satelite clock biases")
+    print(SATELLITE_CLOCK_BIAS)
 
     rng = np.random.default_rng()
 
