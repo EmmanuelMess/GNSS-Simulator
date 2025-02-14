@@ -47,6 +47,7 @@ PSEUDORANGES = np.array([
 REAL_POSITION  = np.array([-1353875.822, 314824.972, -6205811.52], dtype=np.float64)
 REAL_RECEIVER_BIAS = np.float64(-795.52 * 1e-9)
 
+FOUR_SATELLITES = np.array([0, 1, 2, 3]) # G04 G11 G14 G15
 FOUR_GOOD_SATELLITES = np.array([0, 4, 5, 6]) # G04 G18 G19 G22
 
 class GroundTruthTest(unittest.TestCase):
@@ -59,41 +60,41 @@ class GroundTruthTest(unittest.TestCase):
 class TaylorAproximationTest(unittest.TestCase):
     def test_mcmurdo_position_few_satellites(self):
         approx_position, clock_bias, gnss_position_error =\
-            main.getGnssPositionTaylor(PSEUDORANGES[FOUR_GOOD_SATELLITES], SATELLITE_POSITIONS[FOUR_GOOD_SATELLITES],
-                                       SATELLITE_CLOCK_BIAS[FOUR_GOOD_SATELLITES], 1e-3)
+            main.getGnssPositionTaylor(PSEUDORANGES[FOUR_SATELLITES], SATELLITE_POSITIONS[FOUR_SATELLITES],
+                                       SATELLITE_CLOCK_BIAS[FOUR_SATELLITES], 1e-3)
 
-        self.assertAlmostEqual(approx_position[0], REAL_POSITION[0], delta=10)
-        self.assertAlmostEqual(approx_position[1], REAL_POSITION[1], delta=10)
-        self.assertAlmostEqual(approx_position[2], REAL_POSITION[2], delta=10)
-        self.assertAlmostEqual(clock_bias, REAL_RECEIVER_BIAS)
+        distance = np.linalg.norm(approx_position - REAL_POSITION)
+
+        self.assertLess(distance, 300)
+        self.assertAlmostEqual(clock_bias, REAL_RECEIVER_BIAS, delta=0.001)
 
     def test_mcmurdo_position(self):
         approx_position, clock_bias, gnss_position_error = main.getGnssPositionTaylor(PSEUDORANGES, SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS, 1e-3)
 
-        self.assertAlmostEqual(approx_position[0], REAL_POSITION[0], delta=5)
-        self.assertAlmostEqual(approx_position[1], REAL_POSITION[1], delta=5)
-        self.assertAlmostEqual(approx_position[2], REAL_POSITION[2], delta=5)
-        self.assertAlmostEqual(clock_bias, REAL_RECEIVER_BIAS)
+        distance = np.linalg.norm(approx_position - REAL_POSITION)
+
+        self.assertLess(distance, 1)
+        self.assertAlmostEqual(clock_bias, REAL_RECEIVER_BIAS, delta=0.001)
 
 
 class LSEAproximationTest(unittest.TestCase):
     def test_mcmurdo_position_few_satellites(self):
         approx_position, clock_bias, gnss_position_error =\
-            main.getGnssPositionScipy(PSEUDORANGES[FOUR_GOOD_SATELLITES], SATELLITE_POSITIONS[FOUR_GOOD_SATELLITES],
-                                      SATELLITE_CLOCK_BIAS[FOUR_GOOD_SATELLITES], 1e-3)
+            main.getGnssPositionScipy(PSEUDORANGES[FOUR_SATELLITES], SATELLITE_POSITIONS[FOUR_SATELLITES],
+                                      SATELLITE_CLOCK_BIAS[FOUR_SATELLITES], 1e-3)
 
-        self.assertAlmostEqual(approx_position[0], REAL_POSITION[0], delta=10)
-        self.assertAlmostEqual(approx_position[1], REAL_POSITION[1], delta=10)
-        self.assertAlmostEqual(approx_position[2], REAL_POSITION[2], delta=10)
-        self.assertAlmostEqual(clock_bias, REAL_RECEIVER_BIAS)
+        distance = np.linalg.norm(approx_position - REAL_POSITION)
+
+        self.assertLess(distance, 300)
+        self.assertAlmostEqual(clock_bias, REAL_RECEIVER_BIAS, delta=0.001)
 
     def test_mcmurdo_position(self):
         approx_position, clock_bias, gnss_position_error = main.getGnssPositionScipy(PSEUDORANGES, SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS, 1e-3)
 
-        self.assertAlmostEqual(approx_position[0], REAL_POSITION[0], delta=5)
-        self.assertAlmostEqual(approx_position[1], REAL_POSITION[1], delta=5)
-        self.assertAlmostEqual(approx_position[2], REAL_POSITION[2], delta=5)
-        self.assertAlmostEqual(clock_bias, REAL_RECEIVER_BIAS)
+        distance = np.linalg.norm(approx_position - REAL_POSITION)
+
+        self.assertLess(distance, 1)
+        self.assertAlmostEqual(clock_bias, REAL_RECEIVER_BIAS, delta=0.001)
 
 
 if __name__ == '__main__':

@@ -40,18 +40,18 @@ SATELLITE_POSITIONS = np.array([
 ], dtype=np.float64)
 
 SATELLITE_CLOCK_BIAS = np.array([
-   0,# 5 * 1e-6,
-   0,# -10 * 1e-6,
-   0,# 7 * 1e-6,
-   0,# 10 * 1e-6,
-   0,# 60 * 1e-6,
-   0,# -100 * 1e-6,
+    5 * 1e-6,
+    -10 * 1e-6,
+    7 * 1e-6,
+    10 * 1e-6,
+    60 * 1e-6,
+    -100 * 1e-6,
 ], dtype=np.float64)
 
 SATELLITE_NUMBER = SATELLITE_CLOCK_BIAS.shape[0]
 
 RECEIVER_CLOCK_BIAS = np.float64(1 * 1e-3)
-# Walk of 0.1ns per second
+# Walk of 0.1us per second
 # From https://www.e-education.psu.edu/geog862/node/1716
 RECEIVER_CLOCK_WALK = np.float64(1 * 1e-6)
 
@@ -74,12 +74,13 @@ def getGnssPositionTaylor(pseudorange, gnss_satelite_position_aproximation, gnss
     A linearization of the pseudorange error, via a taylor aproximation, is minimized.
     But has problems on numerical precision (substracts large floating values)
     From http://www.grapenthin.org/notes/2019_03_11_pseudorange_position_estimation/
+    Numeric fixes from https://gssc.esa.int/navipedia/index.php?title=Code_Based_Positioning_(SPS)
     :return:
     """
     satellite_number = gnss_satelite_time_bias_aproximation.shape[0]
 
     gnss_position_aproximation = np.array([1, 1, 1], dtype=np.float64)
-    gnss_receiver_clock_bias_approximation = np.float64(1e-6)
+    gnss_receiver_clock_bias_approximation = np.float64(1e-6) * scipy.constants.c
     gnss_position_error = np.inf
 
     # TODO add satelite weighting
@@ -90,12 +91,12 @@ def getGnssPositionTaylor(pseudorange, gnss_satelite_position_aproximation, gnss
 
         gnss_pseudorange_approximation = (
                     np.linalg.norm(gnss_satelite_position_aproximation - gnss_position_aproximation, axis=1)
-                    + (gnss_receiver_clock_bias_approximation - gnss_satelite_time_bias_aproximation) * scipy.constants.c)
+                    + (gnss_receiver_clock_bias_approximation - gnss_satelite_time_bias_aproximation * scipy.constants.c))
 
         delta_gnss_pseudorange = pseudorange.copy() - gnss_pseudorange_approximation
 
         delta_satelites = gnss_position_aproximation - gnss_satelite_position_aproximation
-        cs = np.ones((1, satellite_number), dtype=np.float64) * scipy.constants.c
+        cs = np.ones((1, satellite_number), dtype=np.float64)
 
         G = np.concatenate((delta_satelites / gnss_pseudorange_approximation.reshape((-1, 1)), cs.T), axis=1)
 
@@ -108,12 +109,15 @@ def getGnssPositionTaylor(pseudorange, gnss_satelite_position_aproximation, gnss
 
         gnss_position_error = np.linalg.norm(gnss_position_delta)
 
+    gnss_receiver_clock_bias_approximation /= scipy.constants.c
+
     return gnss_position_aproximation, gnss_receiver_clock_bias_approximation, np.linalg.norm(delta_gnss_pseudorange)
 
 
 def getGnssPositionScipy(pseudorange, gnss_satelite_position_aproximation, gnss_satelite_time_bias_aproximation, xtol):
     """
     A linearization of the pseudorange error, via scipy.optimize.least_squares
+    This is an adaptation of getGnssPositionTaylor
     :return:
     """
     # TODO add satelite weighting
@@ -122,7 +126,7 @@ def getGnssPositionScipy(pseudorange, gnss_satelite_position_aproximation, gnss_
 
     def pseudoranges_approximation(gnss_position_aproximation, gnss_receiver_clock_bias_approximation):
         return (np.linalg.norm(gnss_satelite_position_aproximation - gnss_position_aproximation, axis=1)
-                                    + (gnss_receiver_clock_bias_approximation - gnss_satelite_time_bias_aproximation) * scipy.constants.c)
+                                    + (gnss_receiver_clock_bias_approximation - gnss_satelite_time_bias_aproximation * scipy.constants.c))
 
     def fun(x):
         gnss_position_aproximation = x[:3]
@@ -135,7 +139,7 @@ def getGnssPositionScipy(pseudorange, gnss_satelite_position_aproximation, gnss_
         gnss_receiver_clock_bias_approximation = x[-1]
 
         delta_satelites = gnss_satelite_position_aproximation - gnss_position_aproximation
-        cs = np.ones((1, satellite_number), dtype=np.float64) * -1 * scipy.constants.c
+        cs = np.ones((1, satellite_number), dtype=np.float64) * -1
 
         approx = pseudoranges_approximation(gnss_position_aproximation, gnss_receiver_clock_bias_approximation)
 
@@ -143,9 +147,9 @@ def getGnssPositionScipy(pseudorange, gnss_satelite_position_aproximation, gnss_
 
         return G
 
-    result = scipy.optimize.least_squares(fun, x0=np.array([1, 1, 1, 1e-6], dtype=np.float64), method='lm', jac=jac, xtol=xtol)
+    result = scipy.optimize.least_squares(fun, x0=np.array([1, 1, 1, 1e-6 * scipy.constants.c], dtype=np.float64), method='lm', jac=jac, xtol=xtol)
     gnss_position_aproximation = result.x[:3]
-    gnss_receiver_clock_bias_approximation = result.x[-1]
+    gnss_receiver_clock_bias_approximation = result.x[-1] / scipy.constants.c
     gnss_position_error = np.linalg.norm(result.fun)
 
     return gnss_position_aproximation, gnss_receiver_clock_bias_approximation, gnss_position_error
@@ -167,7 +171,7 @@ def getGnssPVT(rng, player_positions, delta, reciever_clock_bias) -> Tuple[array
     tropospheric_delay = 0.10
 
     # See GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
-    bias_difference = scipy.constants.c * (SATELLITE_CLOCK_BIAS.reshape((-1)) + reciever_clock_bias)
+    bias_difference = scipy.constants.c * (reciever_clock_bias - SATELLITE_CLOCK_BIAS.reshape((-1)))
     range = np.linalg.norm(SATELLITE_POSITIONS - player_position, axis=1).reshape((-1))
 
     # Assume open field
@@ -180,7 +184,7 @@ def getGnssPVT(rng, player_positions, delta, reciever_clock_bias) -> Tuple[array
 
     # Noise from sources local to the antenna, helps to model interference
     # Extrapolated from GNSS interference mitigation: A measurement and position domain assessment
-    jammer = 0 # dB
+    jammer = 30 # dB
     def correction(noiseLevel):
         if noiseLevel <= NOISE_CORRECTION_LEVEL:
             return 0
@@ -193,7 +197,7 @@ def getGnssPVT(rng, player_positions, delta, reciever_clock_bias) -> Tuple[array
     print(f"Noise: {localNoiseEffect}m")
 
     # TODO discretize to the PRN precision
-    pseudorange = range + bias_difference #+ tropospheric_delay + ionospheric_delay + multipath_bias + epsilon + localNoiseEffect
+    pseudorange = range + bias_difference + tropospheric_delay + ionospheric_delay + multipath_bias + epsilon + localNoiseEffect
 
     # Computation of the satellite orbit, from ephimeris
     # Assume satelite position is known because ephimeris is transmitted during the first fix
