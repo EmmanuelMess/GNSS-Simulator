@@ -40,12 +40,12 @@ SATELLITE_POSITIONS = np.array([
 ], dtype=np.float64)
 
 SATELLITE_CLOCK_BIAS = np.array([
-    5 * 1e-6,
-    -10 * 1e-6,
-    7 * 1e-6,
-    10 * 1e-6,
-    60 * 1e-6,
-    -100 * 1e-6,
+   0,# 5 * 1e-6,
+   0,# -10 * 1e-6,
+   0,# 7 * 1e-6,
+   0,# 10 * 1e-6,
+   0,# 60 * 1e-6,
+   0,# -100 * 1e-6,
 ], dtype=np.float64)
 
 SATELLITE_NUMBER = SATELLITE_CLOCK_BIAS.shape[0]
@@ -76,21 +76,28 @@ def getGnssPositionTaylor(pseudorange, gnss_satelite_position_aproximation, gnss
     From http://www.grapenthin.org/notes/2019_03_11_pseudorange_position_estimation/
     :return:
     """
+    satellite_number = gnss_satelite_time_bias_aproximation.shape[0]
+
     gnss_position_aproximation = np.array([1, 1, 1], dtype=np.float64)
     gnss_receiver_clock_bias_approximation = np.float64(1e-6)
-    gnss_pseudorange_approximation = (np.linalg.norm(gnss_satelite_position_aproximation - gnss_position_aproximation, axis=1)
-                                      + (gnss_satelite_time_bias_aproximation + gnss_receiver_clock_bias_approximation) * scipy.constants.c)
     gnss_position_error = np.inf
 
     # TODO add satelite weighting
 
-    while gnss_position_error > xtol:
+    for _ in range(100):
+        if gnss_position_error < xtol:
+            break
+
+        gnss_pseudorange_approximation = (
+                    np.linalg.norm(gnss_satelite_position_aproximation - gnss_position_aproximation, axis=1)
+                    + (gnss_receiver_clock_bias_approximation - gnss_satelite_time_bias_aproximation) * scipy.constants.c)
+
         delta_gnss_pseudorange = pseudorange.copy() - gnss_pseudorange_approximation
 
         delta_satelites = gnss_position_aproximation - gnss_satelite_position_aproximation
-        cs = np.ones((1, SATELLITE_NUMBER), dtype=np.float64) * scipy.constants.c
+        cs = np.ones((1, satellite_number), dtype=np.float64) * scipy.constants.c
 
-        G = np.concatenate((delta_satelites, cs.T), axis=1) / gnss_pseudorange_approximation.reshape((-1, 1))
+        G = np.concatenate((delta_satelites / gnss_pseudorange_approximation.reshape((-1, 1)), cs.T), axis=1)
 
         m = (np.linalg.pinv(G) @ delta_gnss_pseudorange.T).reshape(-1)
         gnss_position_delta = m[:3]
@@ -98,11 +105,10 @@ def getGnssPositionTaylor(pseudorange, gnss_satelite_position_aproximation, gnss
 
         gnss_position_aproximation += gnss_position_delta
         gnss_receiver_clock_bias_approximation += gnss_clock_bias_delta
-        gnss_pseudorange_approximation += delta_gnss_pseudorange
 
         gnss_position_error = np.linalg.norm(gnss_position_delta)
 
-    return gnss_position_aproximation, gnss_receiver_clock_bias_approximation, gnss_position_error
+    return gnss_position_aproximation, gnss_receiver_clock_bias_approximation, np.linalg.norm(delta_gnss_pseudorange)
 
 
 def getGnssPositionScipy(pseudorange, gnss_satelite_position_aproximation, gnss_satelite_time_bias_aproximation, xtol):
@@ -112,17 +118,35 @@ def getGnssPositionScipy(pseudorange, gnss_satelite_position_aproximation, gnss_
     """
     # TODO add satelite weighting
 
+    satellite_number = gnss_satelite_time_bias_aproximation.shape[0]
+
+    def pseudoranges_approximation(gnss_position_aproximation, gnss_receiver_clock_bias_approximation):
+        return (np.linalg.norm(gnss_satelite_position_aproximation - gnss_position_aproximation, axis=1)
+                                    + (gnss_receiver_clock_bias_approximation - gnss_satelite_time_bias_aproximation) * scipy.constants.c)
+
     def fun(x):
         gnss_position_aproximation = x[:3]
         gnss_receiver_clock_bias_approximation = x[-1]
-        pseudorange_aproximation = (np.linalg.norm(gnss_satelite_position_aproximation - gnss_position_aproximation, axis=1)
-                                    + (gnss_satelite_time_bias_aproximation + gnss_receiver_clock_bias_approximation) * scipy.constants.c)
-        return (pseudorange - pseudorange_aproximation).reshape(-1)
+        approx = pseudoranges_approximation(gnss_position_aproximation, gnss_receiver_clock_bias_approximation)
+        return (pseudorange - approx).reshape(-1)
 
-    result = scipy.optimize.least_squares(fun, np.array([1, 1, 1, 1], dtype=np.float64), xtol=xtol)
+    def jac(x):
+        gnss_position_aproximation = x[:3]
+        gnss_receiver_clock_bias_approximation = x[-1]
+
+        delta_satelites = gnss_satelite_position_aproximation - gnss_position_aproximation
+        cs = np.ones((1, satellite_number), dtype=np.float64) * -1 * scipy.constants.c
+
+        approx = pseudoranges_approximation(gnss_position_aproximation, gnss_receiver_clock_bias_approximation)
+
+        G = np.concatenate((delta_satelites / approx.reshape((-1, 1)), cs.T), axis=1)
+
+        return G
+
+    result = scipy.optimize.least_squares(fun, x0=np.array([1, 1, 1, 1e-6], dtype=np.float64), method='lm', jac=jac, xtol=xtol)
     gnss_position_aproximation = result.x[:3]
     gnss_receiver_clock_bias_approximation = result.x[-1]
-    gnss_position_error = result.cost
+    gnss_position_error = np.linalg.norm(result.fun)
 
     return gnss_position_aproximation, gnss_receiver_clock_bias_approximation, gnss_position_error
 
@@ -156,7 +180,7 @@ def getGnssPVT(rng, player_positions, delta, reciever_clock_bias) -> Tuple[array
 
     # Noise from sources local to the antenna, helps to model interference
     # Extrapolated from GNSS interference mitigation: A measurement and position domain assessment
-    jammer = 30 # dB
+    jammer = 0 # dB
     def correction(noiseLevel):
         if noiseLevel <= NOISE_CORRECTION_LEVEL:
             return 0
@@ -169,7 +193,7 @@ def getGnssPVT(rng, player_positions, delta, reciever_clock_bias) -> Tuple[array
     print(f"Noise: {localNoiseEffect}m")
 
     # TODO discretize to the PRN precision
-    pseudorange = range + bias_difference + tropospheric_delay + ionospheric_delay + multipath_bias + epsilon + localNoiseEffect
+    pseudorange = range + bias_difference #+ tropospheric_delay + ionospheric_delay + multipath_bias + epsilon + localNoiseEffect
 
     # Computation of the satellite orbit, from ephimeris
     # Assume satelite position is known because ephimeris is transmitted during the first fix
@@ -178,7 +202,7 @@ def getGnssPVT(rng, player_positions, delta, reciever_clock_bias) -> Tuple[array
     gnss_satelite_time_bias_aproximation = SATELLITE_CLOCK_BIAS.copy()
 
     gnss_position_aproximation, gnss_receiver_clock_bias_approximation, gnss_position_error = (
-        getGnssPositionScipy(pseudorange, gnss_satelite_position_aproximation, gnss_satelite_time_bias_aproximation,1e-8))
+        getGnssPositionScipy(pseudorange, gnss_satelite_position_aproximation, gnss_satelite_time_bias_aproximation,1e-9))
 
     A = np.concatenate(
         (
