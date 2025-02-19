@@ -187,6 +187,49 @@ class Solver:
 
         return gnss_position_aproximation, gnss_receiver_clock_bias_approximation, gnss_position_error
 
+    def getGnssVelocityTaylor(self, direct_doppler, receiver_position, xtol):
+        """
+        A linearization of the pseudorange rate error, and least squares solutions
+        From Global Positioning System section 6.2.1, adapted from getGnssPositionTaylor
+        """
+        # TODO add satelite weighting
+
+        pseudorange_rates = scipy.constants.c / GNSS_SIGNAL_FREQUENCY * direct_doppler
+
+        gnss_velocity_aproximation = np.array([1, 1, 1], dtype=np.float64)
+        gnss_receiver_clock_drift_approximation = np.float64(1e-6)
+        gnss_velocity_error = np.inf
+
+        # TODO add satelite weighting
+
+        for _ in range(100):
+            if gnss_velocity_error < xtol:
+                break
+
+            velocity_difference = gnss_velocity_aproximation - self.satellite_velocities
+            satellite_user_delta = self.satellite_positions - receiver_position
+            satellite_line_of_sight = satellite_user_delta / np.linalg.norm(satellite_user_delta, axis=1).reshape((-1, 1))
+            velocity_scalar_projection = np.sum(velocity_difference * satellite_line_of_sight, axis=1)
+            pseudorange_rates_approximation = velocity_scalar_projection + gnss_receiver_clock_drift_approximation
+
+            delta_gnss_pseudorange_rates = pseudorange_rates - pseudorange_rates_approximation
+
+            cs = np.ones((1, self.satellite_number), dtype=np.float64)
+
+            G = np.concatenate((satellite_line_of_sight, cs.T), axis=1)
+
+            m = (np.linalg.pinv(G) @ delta_gnss_pseudorange_rates.T).reshape(-1)
+            gnss_velocity_delta = m[:3]
+            gnss_clock_drift_delta = m[-1]
+
+            gnss_velocity_aproximation += gnss_velocity_delta
+            gnss_receiver_clock_drift_approximation += gnss_clock_drift_delta
+
+            gnss_velocity_error = np.linalg.norm(gnss_velocity_delta)
+
+        return gnss_velocity_aproximation, gnss_receiver_clock_drift_approximation, gnss_velocity_error
+
+
     def getGnssVelocityScipy(self, direct_doppler, receiver_position, xtol):
         """
         A linearization of the pseudorange rate error, via scipy.optimize.least_squares
@@ -342,7 +385,7 @@ def getGnssPVT(simulator: Simulator, solver: Solver, player_positions, player_ve
     # From https://satellite-navigation.springeropen.com/counter/pdf/10.1186/s43020-023-00098-2.pdf
     # Also see Navigation from Low Earth Orbit – Part 2: Models, Implementation, and Performance section 2.2
     gnss_velocity_approximation, gnss_receiver_clock_drift_approximation, gnss_velocity_error = (
-        solver.getGnssVelocityScipy(direct_doppler, gnss_position_aproximation, 1e-9))
+        solver.getGnssVelocityTaylor(direct_doppler, gnss_position_aproximation, 1e-9))
 
     print(f"- Velocity")
     print(f"Cost {gnss_velocity_error}, estimated velocity {gnss_velocity_approximation}m/s, linear velocity {np.linalg.norm(gnss_velocity_approximation)}m/s")
