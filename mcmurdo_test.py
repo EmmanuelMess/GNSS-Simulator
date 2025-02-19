@@ -59,9 +59,10 @@ class GroundTruthTest(unittest.TestCase):
 
 class TaylorAproximationTest(unittest.TestCase):
     def test_mcmurdo_position_few_satellites(self):
+        solver = main.Solver(SATELLITE_POSITIONS[FOUR_SATELLITES], SATELLITE_CLOCK_BIAS[FOUR_SATELLITES],
+                             None, None)
         approx_position, clock_bias, gnss_position_error =\
-            main.getGnssPositionTaylor(PSEUDORANGES[FOUR_SATELLITES], SATELLITE_POSITIONS[FOUR_SATELLITES],
-                                       SATELLITE_CLOCK_BIAS[FOUR_SATELLITES], 1e-3)
+            solver.getGnssPositionTaylor(PSEUDORANGES[FOUR_SATELLITES], 1e-3)
 
         distance = np.linalg.norm(approx_position - REAL_POSITION)
 
@@ -69,7 +70,8 @@ class TaylorAproximationTest(unittest.TestCase):
         self.assertAlmostEqual(clock_bias, REAL_RECEIVER_BIAS, delta=0.001)
 
     def test_mcmurdo_position(self):
-        approx_position, clock_bias, gnss_position_error = main.getGnssPositionTaylor(PSEUDORANGES, SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS, 1e-3)
+        solver = main.Solver(SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS,None, None)
+        approx_position, clock_bias, gnss_position_error = solver.getGnssPositionTaylor(PSEUDORANGES, 1e-3)
 
         distance = np.linalg.norm(approx_position - REAL_POSITION)
 
@@ -79,9 +81,10 @@ class TaylorAproximationTest(unittest.TestCase):
 
 class LSEAproximationTest(unittest.TestCase):
     def test_mcmurdo_position_few_satellites(self):
+        solver = main.Solver(SATELLITE_POSITIONS[FOUR_SATELLITES], SATELLITE_CLOCK_BIAS[FOUR_SATELLITES],
+                             None, None)
         approx_position, clock_bias, gnss_position_error =\
-            main.getGnssPositionScipy(PSEUDORANGES[FOUR_SATELLITES], SATELLITE_POSITIONS[FOUR_SATELLITES],
-                                      SATELLITE_CLOCK_BIAS[FOUR_SATELLITES], 1e-3)
+            solver.getGnssPositionScipy(PSEUDORANGES[FOUR_SATELLITES], 1e-3)
 
         distance = np.linalg.norm(approx_position - REAL_POSITION)
 
@@ -89,7 +92,8 @@ class LSEAproximationTest(unittest.TestCase):
         self.assertAlmostEqual(clock_bias, REAL_RECEIVER_BIAS, delta=0.001)
 
     def test_mcmurdo_position(self):
-        approx_position, clock_bias, gnss_position_error = main.getGnssPositionScipy(PSEUDORANGES, SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS, 1e-3)
+        solver = main.Solver(SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS, None, None)
+        approx_position, clock_bias, gnss_position_error = solver.getGnssPositionScipy(PSEUDORANGES, 1e-3)
 
         distance = np.linalg.norm(approx_position - REAL_POSITION)
 
