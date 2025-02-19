@@ -99,11 +99,13 @@ def toVector2(array: array3d) -> Vector2:
     return Vector2(array[0].item(), array[1].item())
 
 class Solver:
-    def __init__(self, satellite_positions, satellite_clock_bias, satellite_velocities, satellite_clock_drift):
+    def __init__(self, satellite_positions, satellite_clock_bias, satellite_velocities, satellite_clock_drift,
+                 satellite_frequencies):
         self.satellite_positions = satellite_positions
         self.satellite_clock_bias = satellite_clock_bias
         self.satellite_velocities = satellite_velocities
         self.satellite_clock_drift = satellite_clock_drift
+        self.satellite_frequencies = satellite_frequencies
         self.satellite_number = satellite_positions.shape[0]
 
     def getGnssPositionTaylor(self, pseudorange, xtol):
@@ -194,7 +196,7 @@ class Solver:
         """
         # TODO add satelite weighting
 
-        pseudorange_rates = scipy.constants.c / GNSS_SIGNAL_FREQUENCY * direct_doppler
+        pseudorange_rates = scipy.constants.c / self.satellite_frequencies * direct_doppler
 
         gnss_velocity_aproximation = np.array([1, 1, 1], dtype=np.float64)
         gnss_receiver_clock_drift_approximation = np.float64(1e-6)
@@ -238,7 +240,7 @@ class Solver:
         """
         # TODO add satelite weighting
 
-        pseudorange_rate = (- scipy.constants.c / GNSS_SIGNAL_FREQUENCY) * direct_doppler
+        pseudorange_rate = (- scipy.constants.c / self.satellite_frequencies) * direct_doppler
 
         def pseudorange_rates_approximation(gnss_velocity_aproximation, gnss_receiver_clock_drift_approximation):
             rate_difference = gnss_velocity_aproximation - self.satellite_velocities
@@ -412,7 +414,8 @@ def main():
     simulator = Simulator(rng, SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS, SATELLITE_VELOCITY_VECTORS,
                           SATELLITE_CLOCK_DRIFT, GNSS_SIGNAL_FREQUENCY, NOISE_CORRECTION_LEVEL, NOISE_FIX_LOSS_LEVEL,
                           NOISE_EFFECT_RATE, SATELLITE_NOISE_STD)
-    solver = Solver(SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS, SATELLITE_VELOCITY_VECTORS, SATELLITE_CLOCK_DRIFT)
+    solver = Solver(SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS, SATELLITE_VELOCITY_VECTORS, SATELLITE_CLOCK_DRIFT,
+                    GNSS_SIGNAL_FREQUENCY)
 
     player_positions: List[array3d] = [np.array([20, 20, 0], dtype=np.float64)]
     player_velocities: List[array3d] = [np.array([0, 0, 0], dtype=np.float64)]
