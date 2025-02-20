@@ -338,6 +338,9 @@ class Simulator:
         doppler_contribution_clock = receiver_clock_drift * (self.satellite_frequency / scipy.constants.c)
         epsilon = self.rng.normal(0.0, self.satellite_noise_std, (self.satellite_amount,))
 
+        # Satellite clock drift, ionospheric and troposferic effects are negligeble
+        # See Global Positioning System_ Signals, Measurements, and Performance section 6.2.1
+
         direct_doppler = velocity_base + doppler_contribution_clock + epsilon
         return direct_doppler
 
