@@ -49,16 +49,6 @@ SATELLITE_CLOCK_BIAS = np.array([
     -100 * 1e-6,
 ], dtype=np.float64)
 
-SATELLITE_CLOCK_DRIFT = np.array([
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-], dtype=np.float64)
-
-
 SATELLITE_NUMBER = SATELLITE_CLOCK_BIAS.shape[0]
 
 EARTH_MASS = M_earth.value
@@ -99,12 +89,11 @@ def toVector2(array: array3d) -> Vector2:
     return Vector2(array[0].item(), array[1].item())
 
 class Solver:
-    def __init__(self, satellite_positions, satellite_clock_bias, satellite_velocities, satellite_clock_drift,
+    def __init__(self, satellite_positions, satellite_clock_bias, satellite_velocities,
                  satellite_frequencies):
         self.satellite_positions = satellite_positions
         self.satellite_clock_bias = satellite_clock_bias
         self.satellite_velocities = satellite_velocities
-        self.satellite_clock_drift = satellite_clock_drift
         self.satellite_frequencies = satellite_frequencies
         self.satellite_number = satellite_positions.shape[0]
 
@@ -268,14 +257,13 @@ class Solver:
 
 
 class Simulator:
-    def __init__(self, rng, satellite_positions, satellite_clock_bias, satellite_velocities, satellite_clock_drift,
+    def __init__(self, rng, satellite_positions, satellite_clock_bias, satellite_velocities,
                  satellite_frequency, noise_correction_level, noise_fix_loss_level, noise_effect_rate,
                  satellite_noise_std):
         self.rng = rng
         self.satellite_positions = satellite_positions
         self.satellite_clock_bias = satellite_clock_bias
         self.satellite_velocities = satellite_velocities
-        self.satellite_clock_drift = satellite_clock_drift
         self.satellite_frequency = satellite_frequency # TODO make a vector
         self.satellite_noise_std = satellite_noise_std
         self.noise_correction_level = noise_correction_level
@@ -410,15 +398,12 @@ def main():
     print(SATELLITE_VELOCITY_VECTORS)
     print("Satelite clock biases")
     print(SATELLITE_CLOCK_BIAS)
-    print("Satelite clock drifts")
-    print(SATELLITE_CLOCK_DRIFT)
 
     rng = np.random.default_rng()
     simulator = Simulator(rng, SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS, SATELLITE_VELOCITY_VECTORS,
-                          SATELLITE_CLOCK_DRIFT, GNSS_SIGNAL_FREQUENCY, NOISE_CORRECTION_LEVEL, NOISE_FIX_LOSS_LEVEL,
+                          GNSS_SIGNAL_FREQUENCY, NOISE_CORRECTION_LEVEL, NOISE_FIX_LOSS_LEVEL,
                           NOISE_EFFECT_RATE, SATELLITE_NOISE_STD)
-    solver = Solver(SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS, SATELLITE_VELOCITY_VECTORS, SATELLITE_CLOCK_DRIFT,
-                    GNSS_SIGNAL_FREQUENCY)
+    solver = Solver(SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS, SATELLITE_VELOCITY_VECTORS, GNSS_SIGNAL_FREQUENCY)
 
     player_positions: List[array3d] = [np.array([20, 20, 0], dtype=np.float64)]
     player_velocities: List[array3d] = [np.array([0, 0, 0], dtype=np.float64)]
