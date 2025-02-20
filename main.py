@@ -97,7 +97,7 @@ class Solver:
         self.satellite_frequencies = satellite_frequencies
         self.satellite_number = satellite_positions.shape[0]
 
-    def getGnssPositionTaylor(self, pseudorange, xtol):
+    def solve_position(self, pseudorange, xtol):
         """
         A linearization of the pseudorange error, via a taylor aproximation, is minimized.
         But has problems on numerical precision (substracts large floating values)
@@ -140,7 +140,7 @@ class Solver:
         return gnss_position_aproximation, gnss_receiver_clock_bias_approximation, np.linalg.norm(delta_gnss_pseudorange)
 
 
-    def getGnssPositionScipy(self, pseudorange, xtol):
+    def solve_position_scipy(self, pseudorange, xtol):
         """
         A linearization of the pseudorange error, via scipy.optimize.least_squares
         This is an adaptation of getGnssPositionTaylor
@@ -178,7 +178,7 @@ class Solver:
 
         return gnss_position_aproximation, gnss_receiver_clock_bias_approximation, gnss_position_error
 
-    def getGnssVelocityTaylor(self, direct_doppler, receiver_position, xtol):
+    def solve_velocity(self, direct_doppler, receiver_position, xtol):
         """
         A linearization of the pseudorange rate error, and least squares solutions
         From Global Positioning System section 6.2.1, adapted from getGnssPositionTaylor
@@ -221,7 +221,7 @@ class Solver:
         return gnss_velocity_aproximation, gnss_receiver_clock_drift_approximation, gnss_velocity_error
 
 
-    def getGnssVelocityScipy(self, direct_doppler, receiver_position, xtol):
+    def solve_velocity_scipy(self, direct_doppler, receiver_position, xtol):
         """
         A linearization of the pseudorange rate error, via scipy.optimize.least_squares
         This is an adaptation of getGnssPositionScipy
@@ -350,42 +350,47 @@ class Simulator:
 
         return Q, gdop, hdop, vdop, pdop
 
+class GnssSensor:
+    def __init__(self, simulator: Simulator, solver: Solver):
+        self.simulator = simulator
+        self.solver = solver
 
-def getGnssPVT(simulator: Simulator, solver: Solver, player_positions, player_velocities, reciever_clock_bias,
-               reciever_clock_drift) -> Tuple[array3d, array3d, np.float64]:
-    print("===")
 
-    player_position = player_positions[-1]
-    pseudoranges = simulator.get_pseudoranges(player_position, reciever_clock_bias)
+    def update(self, player_positions, player_velocities, reciever_clock_bias, reciever_clock_drift)\
+            -> Tuple[array3d, array3d, np.float64, np.float64]:
+        print("===")
 
-    # Computation of the satellite orbit, from ephimeris
-    # Assume satellite position is known because ephimeris is transmitted during the first fix
-    # From https://gssc.esa.int/navipedia/index.php/Coordinates_Computation_from_Almanac_Data
-    gnss_position_aproximation, gnss_receiver_clock_bias_approximation, gnss_position_error = (
-        solver.getGnssPositionScipy(pseudoranges,1e-9))
+        player_position = player_positions[-1]
+        pseudoranges = self.simulator.get_pseudoranges(player_position, reciever_clock_bias)
 
-    Q, gdop, hdop, vdop, pdop = simulator.get_dilution_of_presition(player_position)
+        # Computation of the satellite orbit, from ephimeris
+        # Assume satellite position is known because ephimeris is transmitted during the first fix
+        # From https://gssc.esa.int/navipedia/index.php/Coordinates_Computation_from_Almanac_Data
+        position_aproximation, clock_bias_approximation, gnss_position_error = (
+            self.solver.solve_position_scipy(pseudoranges, 1e-9))
 
-    print(f"- Position")
-    print(f"Cost {gnss_position_error}, estimated position {gnss_position_aproximation}m, estimated reciever clock bias {gnss_receiver_clock_bias_approximation}s")
-    print(f"GDOP {gdop} HDOP {hdop} VDOP {vdop} PDOP {pdop}")
-    print(f"Error {np.linalg.norm(gnss_position_aproximation-player_position)}m, real position {player_position}m, real reciever clock bias {reciever_clock_bias}s")
+        Q, gdop, hdop, vdop, pdop = self.simulator.get_dilution_of_presition(player_position)
 
-    player_velocity = player_velocities[-1]
-    direct_doppler = simulator.get_doppler(player_position, player_velocity, reciever_clock_drift)
+        print(f"- Position")
+        print(f"Cost {gnss_position_error}, estimated position {position_aproximation}m, estimated reciever clock bias {clock_bias_approximation}s")
+        print(f"GDOP {gdop} HDOP {hdop} VDOP {vdop} PDOP {pdop}")
+        print(f"Error {np.linalg.norm(position_aproximation-player_position)}m, real position {player_position}m, real reciever clock bias {reciever_clock_bias}s")
 
-    # Reciever estimation
-    # From https://satellite-navigation.springeropen.com/counter/pdf/10.1186/s43020-023-00098-2.pdf
-    # Also see Navigation from Low Earth Orbit – Part 2: Models, Implementation, and Performance section 2.2
-    gnss_velocity_approximation, gnss_receiver_clock_drift_approximation, gnss_velocity_error = (
-        solver.getGnssVelocityTaylor(direct_doppler, gnss_position_aproximation, 1e-9))
+        player_velocity = player_velocities[-1]
+        direct_doppler = self.simulator.get_doppler(player_position, player_velocity, reciever_clock_drift)
 
-    print(f"- Velocity")
-    print(f"Cost {gnss_velocity_error}, estimated velocity {gnss_velocity_approximation}m/s, linear velocity {np.linalg.norm(gnss_velocity_approximation)}m/s")
-    print(f"Estimated receiver clock drift {gnss_receiver_clock_drift_approximation}s")
-    print(f"Error {np.linalg.norm(gnss_velocity_approximation-player_velocity)}m/s, real velocity {player_velocity}m/s, linear_velocity {np.linalg.norm(player_velocity)}m/s")
+        # Reciever estimation
+        # From https://satellite-navigation.springeropen.com/counter/pdf/10.1186/s43020-023-00098-2.pdf
+        # Also see Navigation from Low Earth Orbit – Part 2: Models, Implementation, and Performance section 2.2
+        velocity_approximation, clock_drift_approximation, gnss_velocity_error = (
+            self.solver.solve_velocity(direct_doppler, position_aproximation, 1e-9))
 
-    return gnss_position_aproximation, gnss_velocity_approximation, gnss_receiver_clock_bias_approximation
+        print(f"- Velocity")
+        print(f"Cost {gnss_velocity_error}, estimated velocity {velocity_approximation}m/s, linear velocity {np.linalg.norm(velocity_approximation)}m/s")
+        print(f"Estimated receiver clock drift {clock_drift_approximation}s")
+        print(f"Error {np.linalg.norm(velocity_approximation-player_velocity)}m/s, real velocity {player_velocity}m/s, linear_velocity {np.linalg.norm(player_velocity)}m/s")
+
+        return position_aproximation, velocity_approximation, clock_bias_approximation, clock_drift_approximation
 
 
 def main():
@@ -404,6 +409,7 @@ def main():
                           GNSS_SIGNAL_FREQUENCY, NOISE_CORRECTION_LEVEL, NOISE_FIX_LOSS_LEVEL,
                           NOISE_EFFECT_RATE, SATELLITE_NOISE_STD)
     solver = Solver(SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS, SATELLITE_VELOCITY_VECTORS, GNSS_SIGNAL_FREQUENCY)
+    sensor = GnssSensor(simulator, solver)
 
     player_positions: List[array3d] = [np.array([20, 20, 0], dtype=np.float64)]
     player_velocities: List[array3d] = [np.array([0, 0, 0], dtype=np.float64)]
@@ -442,9 +448,8 @@ def main():
             # See GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
             if time_since_gnss < np.inf:
                 receiver_clock_bias += RECEIVER_CLOCK_WALK * rng.normal() * time_since_gnss
-            gnss_position, gnss_velocity, gnss_time_bias = getGnssPVT(simulator, solver, player_positions,
-                                                                      player_velocities, receiver_clock_bias,
-                                                                      RECEIVER_CLOCK_WALK)
+            gnss_position, gnss_velocity, _, _ = sensor.update(player_positions, player_velocities, receiver_clock_bias,
+                                                               RECEIVER_CLOCK_WALK)
             gnss_positions.append(gnss_position)
             gnss_velocities.append(gnss_velocity)
             time_since_gnss = 0
