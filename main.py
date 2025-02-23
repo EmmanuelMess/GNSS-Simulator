@@ -65,6 +65,24 @@ SATELLITE_VELOCITY_VECTORS = np.array([
     [0, 0.095, np.sqrt(1-0.095**2)],
 ], dtype=np.float64) * SATELLITE_VELOCITY
 
+SATELLITE_ALPHAS = np.array([
+    [0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6],
+    [0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6],
+    [0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6],
+    [0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6],
+    [0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6],
+    [0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6],
+])
+
+SATELLITE_BETAS = np.array([
+    [0.7782 * 1e5, 0.3277 * 1e5, -0.6554 * 1e5, 0-0.1966 * 1e6],
+    [0.7782 * 1e5, 0.3277 * 1e5, -0.6554 * 1e5, 0-0.1966 * 1e6],
+    [0.7782 * 1e5, 0.3277 * 1e5, -0.6554 * 1e5, 0-0.1966 * 1e6],
+    [0.7782 * 1e5, 0.3277 * 1e5, -0.6554 * 1e5, 0-0.1966 * 1e6],
+    [0.7782 * 1e5, 0.3277 * 1e5, -0.6554 * 1e5, 0-0.1966 * 1e6],
+    [0.7782 * 1e5, 0.3277 * 1e5, -0.6554 * 1e5, 0-0.1966 * 1e6],
+])
+
 RECEIVER_CLOCK_BIAS = np.float64(1 * 1e-3)
 # Walk of 0.1us per second
 # From https://www.e-education.psu.edu/geog862/node/1716
@@ -87,6 +105,59 @@ GNSS_SIGNAL_FREQUENCY = GPS_L1_FREQUENCY
 
 def toVector2(array: array3d) -> Vector2:
     return Vector2(array[0].item(), array[1].item())
+
+def ecef2llh(position: array3d):
+    """
+     From https://gssc.esa.int/navipedia/index.php/Ellipsoidal_and_Cartesian_Coordinates_Conversion
+    """
+    # WGS84 constants
+    a = 6_378_137.0
+    b = 6_356_752.3142
+    e_2 = (a**2 - b**2) / a**2
+
+    x, y, z = position[0], position[1], position[2]
+
+    l = np.atan2(y, x)
+
+    p = np.hypot(x, y)
+    theta = np.atan(z/((1- e_2) * p))
+    for i in range(10):
+        N = a / np.sqrt(1 - e_2 * np.sin(theta) ** 2)
+        h = p / np.cos(theta) - N
+        theta = np.atan(z / ((1 - e_2 * (N / (N + h))) * p))
+
+    return np.array([theta, l, h])
+
+
+def ecef2aer(positionOnEarth: array3d, positionFar: array3d):
+    """
+    Global Positioning System: Signals, Measurements, and Performance section 4.A.2
+    """
+    llh = ecef2llh(positionOnEarth)
+
+    theta, l, h = llh[0], llh[1], llh[2]
+
+    R = np.array([
+        [-np.sin(l),                np.cos(l),               0            ],
+        [-np.sin(theta)*np.cos(l), -np.sin(theta)*np.sin(l), np.cos(theta)],
+        [ np.cos(theta)*np.cos(l),  np.cos(theta)*np.sin(l), np.sin(theta)],
+    ])
+
+    delta = positionFar - positionOnEarth
+    positionEnu = R @ delta.T
+    e, n, u = positionEnu[0], positionEnu[1], positionEnu[2]
+
+    atan = np.atan2(e, n)
+    azimuth = atan if atan >= 0 else atan + 2*np.pi
+    elevation = np.asin(u / np.linalg.norm(positionEnu))
+    range = np.linalg.norm(delta)
+
+    return np.array([azimuth, elevation, range])
+
+
+def rad2semicircles(value):
+    return np.deg2rad(value * (180 / 2 ** 31))
+
 
 class Solver:
     def __init__(self, satellite_positions, satellite_clock_bias, satellite_velocities,
@@ -258,25 +329,59 @@ class Solver:
 
 class Simulator:
     def __init__(self, rng, satellite_positions, satellite_clock_bias, satellite_velocities,
-                 satellite_frequency, noise_correction_level, noise_fix_loss_level, noise_effect_rate,
-                 satellite_noise_std):
+                 satellite_frequency, satellite_alphas, satellite_betas, noise_correction_level, noise_fix_loss_level,
+                 noise_effect_rate, satellite_noise_std):
         self.rng = rng
         self.satellite_positions = satellite_positions
         self.satellite_clock_bias = satellite_clock_bias
         self.satellite_velocities = satellite_velocities
         self.satellite_frequency = satellite_frequency # TODO make a vector
+        self.satellite_alphas = satellite_alphas
+        self.satellite_betas = satellite_betas
         self.satellite_noise_std = satellite_noise_std
         self.noise_correction_level = noise_correction_level
         self.noise_fix_loss_level = noise_fix_loss_level
         self.noise_effect_rate = noise_effect_rate
         self.satellite_amount = satellite_positions.shape[0]
 
-    def get_pseudoranges(self, player_position, reciever_clock_bias):
-        # TODO Ionospheric delay is function of the angle to the satelite (Klobuchar delay model)
+    def get_pseudoranges(self, player_position_ecef, reciever_clock_bias, time_gps):
+        player_position_llh = ecef2llh(player_position_ecef)
+        satellites_aer = np.array([ecef2aer(player_position_ecef, satellite_position) for satellite_position in self.satellite_positions])
+
         # See https://insidegnss.com/auto/marapr15-WP.pdf
         # And https://gssc.esa.int/navipedia/index.php/Klobuchar_Ionospheric_Model
         # And GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
-        ionospheric_delay = self.rng.normal(0.0, 0.05, (1,))
+        azimuth_semicircles = rad2semicircles(satellites_aer[:, 0])
+        elevation_semicircles = rad2semicircles(satellites_aer[:, 1])
+
+        ec_angle = 0.0137 / (elevation_semicircles + 0.11) - 0.022
+
+        IPPs = player_position_llh[0] + ec_angle * np.cos(satellites_aer[:, 0])
+        IPPs = np.clip(IPPs, a_min=-0.416, a_max= 0.416)
+
+        IPP_lengths = player_position_llh[1] + (ec_angle * np.sin(azimuth_semicircles)) / np.cos(IPPs)
+
+        geomagnetic_latitude = IPPs + 0.064 * np.cos(IPP_lengths - 1.617)
+
+        time_IPP = 43_200 * IPP_lengths + time_gps
+        time_IPP[time_IPP >= 86_400] -= 86_400
+        time_IPP[time_IPP < 0] += 86_400
+
+        amplitude_ionospheric_delay = np.sum(self.satellite_alphas * geomagnetic_latitude.reshape((-1,1)) ** np.array([0,1,2,3]), axis=1)
+        amplitude_ionospheric_delay = np.clip(amplitude_ionospheric_delay, a_min=0, a_max=None)
+
+        period_ionospheric_delay = np.sum(self.satellite_betas * geomagnetic_latitude.reshape((-1,1)) ** np.array([0,1,2,3]), axis=1)
+        period_ionospheric_delay = np.clip(period_ionospheric_delay, a_min=72_000, a_max=None)
+
+        phase_ionospheric_delay = 2 * np.pi * (time_IPP - 50_400) / period_ionospheric_delay
+
+        slant_factor = 1 + 16 * (0.53 - elevation_semicircles) ** 3
+
+        day = (5 * 1e-9 + amplitude_ionospheric_delay * (1 - phase_ionospheric_delay ** 2 / 2 + phase_ionospheric_delay ** 4 / 24)) * slant_factor
+        night = 5 * 1e-9 * slant_factor
+
+        ionospheric_delay_gps_l1 = np.where(phase_ionospheric_delay < 1.57, day, night)
+        ionospheric_delay = (GPS_L1_FREQUENCY / self.satellite_frequency) ** 2 * ionospheric_delay_gps_l1
 
         # TODO Troposferic delay is divided intro dry and wet and varies acording to satellite elevation (Saastamoinen model)
         # Dry constant is set to 10cm
@@ -286,7 +391,7 @@ class Simulator:
 
         # See GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
         bias_difference = scipy.constants.c * (reciever_clock_bias - self.satellite_clock_bias.reshape((-1)))
-        range = np.linalg.norm(self.satellite_positions - player_position, axis=1).reshape((-1))
+        range = np.linalg.norm(self.satellite_positions - player_position_ecef, axis=1).reshape((-1))
 
         # Assume open field
         # From GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
@@ -311,7 +416,7 @@ class Simulator:
 
         localNoiseEffect = correction(jammer)
 
-        pseudorange = range + bias_difference + tropospheric_delay + ionospheric_delay + multipath_bias + epsilon + localNoiseEffect
+        pseudorange = range + bias_difference + scipy.constants.c * tropospheric_delay + scipy.constants.c * ionospheric_delay + multipath_bias + epsilon + localNoiseEffect
 
         return pseudorange
 
@@ -361,7 +466,7 @@ class GnssSensor:
         print("===")
 
         player_position = player_positions[-1]
-        pseudoranges = self.simulator.get_pseudoranges(player_position, reciever_clock_bias)
+        pseudoranges = self.simulator.get_pseudoranges(player_position, reciever_clock_bias, 0)
 
         # Computation of the satellite orbit, from ephimeris
         # Assume satellite position is known because ephimeris is transmitted during the first fix
@@ -406,8 +511,8 @@ def main():
 
     rng = np.random.default_rng()
     simulator = Simulator(rng, SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS, SATELLITE_VELOCITY_VECTORS,
-                          GNSS_SIGNAL_FREQUENCY, NOISE_CORRECTION_LEVEL, NOISE_FIX_LOSS_LEVEL,
-                          NOISE_EFFECT_RATE, SATELLITE_NOISE_STD)
+                          GNSS_SIGNAL_FREQUENCY, SATELLITE_ALPHAS, SATELLITE_BETAS, NOISE_CORRECTION_LEVEL,
+                          NOISE_FIX_LOSS_LEVEL, NOISE_EFFECT_RATE, SATELLITE_NOISE_STD)
     solver = Solver(SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS, SATELLITE_VELOCITY_VECTORS, GNSS_SIGNAL_FREQUENCY)
     sensor = GnssSensor(simulator, solver)
 
