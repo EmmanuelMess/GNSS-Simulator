@@ -344,6 +344,38 @@ class Simulator:
         self.noise_effect_rate = noise_effect_rate
         self.satellite_amount = satellite_positions.shape[0]
 
+    def _tropospheric_average_table(self, latitude):
+        latitudes            = np.array([     15,      30,      45,      60,      75], dtype=np.float64)
+        average_pressures    = np.array([1013.25, 1017.25, 1015.75, 1011.75, 1013.00], dtype=np.float64)
+        average_temperatures = np.array([ 299.65,  294.15,  283.15,  272.15,  263.65], dtype=np.float64)
+        average_es           = np.array([  26.31,   21.79,   11.66,    6.78,    4.11], dtype=np.float64)
+        average_betas        = np.array([6.30e-3,  6.5e-3, 5.58e-3, 5.39e-3, 4.53e-3], dtype=np.float64)
+        average_lambdas      = np.array([   2.77,    3.15,    2.57,    1.81,    1.55], dtype=np.float64)
+
+        average_pressure = np.interp(latitude, latitudes, average_pressures)
+        average_temperature = np.interp(latitude, latitudes, average_temperatures)
+        average_e = np.interp(latitude, latitudes, average_es)
+        average_beta = np.interp(latitude, latitudes, average_betas)
+        average_lambda = np.interp(latitude, latitudes, average_lambdas)
+
+        return average_pressure, average_temperature, average_e, average_beta, average_lambda
+
+    def _tropospheric_deltas_table(self, latitude):
+        latitudes          = np.array([ 15,      30,      45,      60,      75], dtype=np.float64)
+        delta_pressures    = np.array([0.0,   -3.75,   -2.25,   -1.75,    -0.5], dtype=np.float64)
+        delta_temperatures = np.array([0.0,     7.0,    11.0,    15.0,    14.5], dtype=np.float64)
+        delta_es           = np.array([0.0,    8.85,    7.24,    5.36,    3.39], dtype=np.float64)
+        delta_betas        = np.array([0.0, 0.25e-3, 0.32e-3, 0.81e-3, 0.62e-3], dtype=np.float64)
+        delta_lambdas      = np.array([0.0,    0.33,    0.46,    0.74,     0.3], dtype=np.float64)
+
+        delta_pressure = np.interp(latitude, latitudes, delta_pressures)
+        delta_temperature = np.interp(latitude, latitudes, delta_temperatures)
+        delta_e = np.interp(latitude, latitudes, delta_es)
+        delta_beta = np.interp(latitude, latitudes, delta_betas)
+        delta_lambda = np.interp(latitude, latitudes, delta_lambdas)
+
+        return delta_pressure, delta_temperature, delta_e, delta_beta, delta_lambda
+
     def get_pseudoranges(self, player_position_ecef, reciever_clock_bias, time_gps):
         player_position_llh = ecef2llh(player_position_ecef)
         satellites_aer = np.array([ecef2aer(player_position_ecef, satellite_position) for satellite_position in self.satellite_positions])
@@ -351,6 +383,7 @@ class Simulator:
         # See https://insidegnss.com/auto/marapr15-WP.pdf
         # And https://gssc.esa.int/navipedia/index.php/Klobuchar_Ionospheric_Model
         # And GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
+        # TODO test with the orignial paper's example
         azimuth_semicircles = rad2semicircles(satellites_aer[:, 0])
         elevation_semicircles = rad2semicircles(satellites_aer[:, 1])
 
@@ -383,11 +416,49 @@ class Simulator:
         ionospheric_delay_gps_l1 = np.where(phase_ionospheric_delay < 1.57, day, night)
         ionospheric_delay = (GPS_L1_FREQUENCY / self.satellite_frequency) ** 2 * ionospheric_delay_gps_l1
 
-        # TODO Troposferic delay is divided intro dry and wet and varies acording to satellite elevation (Saastamoinen model)
-        # Dry constant is set to 10cm
+        # Troposferic delay is divided intro dry and wet and varies acording to satellite elevation (Saastamoinen model)
         # See https://gssc.esa.int/navipedia/index.php/Galileo_Tropospheric_Correction_Model
+        # And Global Positioning System: Signals, Measurements, and Performance section 5.3.3
         # And GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
-        tropospheric_delay = 0.10
+        def tropospheric_delay_calculation(elevation):
+            if elevation <= np.deg2rad(5):
+                return 0
+
+            player_latitude = np.abs(player_position_llh[0])
+            day_of_year = 0 # TODO this is a parameter
+            northern = player_position_llh[0] > 0
+            day_of_year_min = 28 if northern else 211
+
+            elevation_effect = 1.001 / np.sqrt(0.002001 + np.sin(elevation) ** 2)
+
+            season_multiplier = np.cos(2 * np.pi * (day_of_year - day_of_year_min) / 365.25)
+            average_pressure, average_temperature, average_e, average_beta, average_lambda = self._tropospheric_average_table(player_latitude)
+            delta_pressure, delta_temperature, delta_e, delta_beta, delta_lambda = self._tropospheric_deltas_table(player_latitude)
+
+            pressure = average_pressure - delta_pressure * season_multiplier # mbar
+            temperature = average_temperature - delta_temperature * season_multiplier # K
+            e = average_e - delta_e * season_multiplier # mbar # vapour pressure
+            beta = average_beta - delta_beta * season_multiplier # K/m #  temperature "lapse" rate
+            l = average_lambda - delta_lambda * season_multiplier # 1 # water vapour "lapse" rate
+
+            h = player_position_ecef[2] # m # height above mean-sea-level
+
+            k1 = 77.604 # K/mbar
+            k2 = 382_000 # K²/mbar
+            Rd = 287.054 # J / Kg / K
+            gm = 9.784 # m / s²
+            g = 9.80665 # m / s²
+
+            delay_0_dry = 1e-6 * k1 * Rd * pressure / gm
+            delay_0_wet = (1e-6 * k2 * Rd / ((l + 1) * gm - beta * Rd)) * (e/temperature)
+
+            base = 1 - beta * h / temperature
+            delay_dry = base ** (g / (Rd * beta)) * delay_0_dry
+            delay_wet = base ** ((l+1)*g / (Rd * beta) - 1) * delay_0_wet
+
+            return (delay_dry + delay_wet) * elevation_effect
+
+        tropospheric_delay = np.array([tropospheric_delay_calculation(elevation) for elevation in satellites_aer[:, 1]])
 
         # See GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
         bias_difference = scipy.constants.c * (reciever_clock_bias - self.satellite_clock_bias.reshape((-1)))
@@ -416,7 +487,7 @@ class Simulator:
 
         localNoiseEffect = correction(jammer)
 
-        pseudorange = range + bias_difference + scipy.constants.c * tropospheric_delay + scipy.constants.c * ionospheric_delay + multipath_bias + epsilon + localNoiseEffect
+        pseudorange = range + bias_difference + tropospheric_delay + scipy.constants.c * ionospheric_delay + multipath_bias + epsilon + localNoiseEffect
 
         return pseudorange
 
