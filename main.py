@@ -447,6 +447,7 @@ class Simulator:
     def _tropospheric_delay_calculation(self, player_position_ecef):
         # Troposferic delay is divided intro dry and wet and varies acording to satellite elevation (Saastamoinen model)
         # See https://gssc.esa.int/navipedia/index.php/Galileo_Tropospheric_Correction_Model
+        # And Assessment and Development of a Tropospheric Delay Model for Aircraft Users of the Global Positioning System
         # And Global Positioning System: Signals, Measurements, and Performance section 5.3.3
         # And GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
         player_position_llh = ecef2llh(player_position_ecef)
