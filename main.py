@@ -111,52 +111,64 @@ def ecef2llh(position: array3d):
      From https://gssc.esa.int/navipedia/index.php/Ellipsoidal_and_Cartesian_Coordinates_Conversion
     """
     # WGS84 constants
-    a = 6_378_137.0
-    b = 6_356_752.3142
-    e_2 = (a**2 - b**2) / a**2
+    a = np.float64(6_378_137.0)
+    f = 1 / np.float64(298.257_223_563)
+    b = a * (1.0 - f)
+    e_2 = 2 * f - f**2
 
     x, y, z = position[0], position[1], position[2]
 
     l = np.atan2(y, x)
 
     p = np.hypot(x, y)
+
+    if p < 1e-20:
+        if z >= 0:
+            return np.array([np.pi/2, 0, z - b])
+        else:
+            return np.array([-np.pi/2, 0, -z - b])
+
     theta = np.atan(z/((1- e_2) * p))
-    for i in range(10):
+    for i in range(100):
         N = a / np.sqrt(1 - e_2 * np.sin(theta) ** 2)
         h = p / np.cos(theta) - N
-        theta = np.atan(z / ((1 - e_2 * (N / (N + h))) * p))
+        new_theta = np.atan(z / ((1 - e_2 * (N / (N + h))) * p))
+
+        if np.abs(theta - new_theta) < 1e-9: # See https://wiki.openstreetmap.org/wiki/Precision_of_coordinates
+            break
+        theta = new_theta
 
     return np.array([theta, l, h])
 
 
-def ecef2aer(positionOnEarth: array3d, positionFar: array3d):
+def ecef2aer(receiver_ecef: array3d, satellite_ecef: array3d):
     """
-    Global Positioning System: Signals, Measurements, and Performance section 4.A.2
+    https://gssc.esa.int/navipedia/index.php/Transformations_between_ECEF_and_ENU_coordinates
     """
-    llh = ecef2llh(positionOnEarth)
+    receiver_llh = ecef2llh(receiver_ecef)
 
-    theta, l, h = llh[0], llh[1], llh[2]
+    theta, l, h = receiver_llh[0], receiver_llh[1], receiver_llh[2]
 
-    R = np.array([
-        [-np.sin(l),                np.cos(l),               0            ],
-        [-np.sin(theta)*np.cos(l), -np.sin(theta)*np.sin(l), np.cos(theta)],
-        [ np.cos(theta)*np.cos(l),  np.cos(theta)*np.sin(l), np.sin(theta)],
-    ])
+    delta = satellite_ecef - receiver_ecef
+    delta_unit_vector = delta / np.linalg.norm(delta)
 
-    delta = positionFar - positionOnEarth
-    positionEnu = R @ delta.T
-    e, n, u = positionEnu[0], positionEnu[1], positionEnu[2]
+    e_unit = np.array([- np.sin(l), np.cos(l), 0])
+    n_unit = np.array([- np.cos(l) * np.sin(theta), -np.sin(l) * np.sin(theta), np.cos(theta)])
+    u_unit = np.array([np.cos(l) * np.cos(theta), np.sin(l) * np.cos(theta), np.sin(theta)])
 
-    atan = np.atan2(e, n)
+    elevation = np.asin(np.dot(delta_unit_vector, u_unit))
+    atan = np.atan2(np.dot(delta_unit_vector, e_unit), np.dot(delta_unit_vector, n_unit))
     azimuth = atan if atan >= 0 else atan + 2*np.pi
-    elevation = np.asin(u / np.linalg.norm(positionEnu))
     range = np.linalg.norm(delta)
 
     return np.array([azimuth, elevation, range])
 
 
 def rad2semicircles(value):
-    return np.deg2rad(value * (180 / 2 ** 31))
+    return value / np.pi
+
+def semicircles2rad(value):
+    return value * np.pi
 
 
 class Solver:
@@ -344,6 +356,62 @@ class Simulator:
         self.noise_effect_rate = noise_effect_rate
         self.satellite_amount = satellite_positions.shape[0]
 
+    def _ionospheric_delay_calculation(self, receiver_ecef, time_of_week_gps_seconds):
+        # From https://gssc.esa.int/navipedia/index.php/Klobuchar_Ionospheric_Model
+        # And GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
+        # Reference implementation https://geodesy.noaa.gov/gps-toolbox/ovstedal/klobuchar.for
+
+        receiver_llh = ecef2llh(receiver_ecef)
+        satellites_aer_rad = np.array([ecef2aer(receiver_ecef, satellite_position) for satellite_position in self.satellite_positions])
+
+        if receiver_llh[1] < 0:
+            receiver_llh[1] += 2 * np.pi # because for some reason the algorithm uses longitude in [0, 2*pi]
+
+        receiver_semicircles = rad2semicircles(receiver_llh)
+
+        elevation_semicircles = rad2semicircles(satellites_aer_rad[:, 1])
+
+        ec_angle = 0.0137 / (elevation_semicircles + 0.11) - 0.022
+
+        subionospheric_latitude_semicircles = receiver_semicircles[0] + ec_angle * np.cos(satellites_aer_rad[:, 0])
+        subionospheric_latitude_semicircles = np.clip(subionospheric_latitude_semicircles, a_min=-0.416, a_max=0.416)
+        subionospheric_latitude_rad = semicircles2rad(subionospheric_latitude_semicircles)
+
+        subionospheric_longitude_semicircles = receiver_semicircles[1] + ec_angle * np.sin(satellites_aer_rad[:, 0]) / np.cos(subionospheric_latitude_rad)
+
+        geomagnetic_latitude_semicircles = subionospheric_latitude_semicircles + 0.064 * np.cos(semicircles2rad(subionospheric_longitude_semicircles - 1.617))
+
+        local_time_pierce_point = 43_200 * subionospheric_longitude_semicircles + time_of_week_gps_seconds
+        local_time_pierce_point = np.divmod(local_time_pierce_point, 86_400)[1]
+        local_time_pierce_point[local_time_pierce_point >= 86_400] -= 86_400
+        local_time_pierce_point[local_time_pierce_point < 0] += 86_400
+
+        slant_factor = 1 + 16 * (0.53 - elevation_semicircles) ** 3
+
+        period_ionospheric_delay = self.satellite_betas[:, 0] \
+                                   + self.satellite_betas[:, 1] * geomagnetic_latitude_semicircles \
+                                   + self.satellite_betas[:, 2] * geomagnetic_latitude_semicircles**2 \
+                                   + self.satellite_betas[:, 3] * geomagnetic_latitude_semicircles**3
+
+        period_ionospheric_delay = np.clip(period_ionospheric_delay, a_min=72_000, a_max=None)
+
+        phase_ionospheric_delay = 2 * np.pi * (local_time_pierce_point - 50_400) / period_ionospheric_delay
+
+        amplitude_ionospheric_delay = self.satellite_alphas[:, 0] \
+                                    + self.satellite_alphas[:, 1] * geomagnetic_latitude_semicircles \
+                                    + self.satellite_alphas[:, 2] * geomagnetic_latitude_semicircles**2 \
+                                    + self.satellite_alphas[:, 3] * geomagnetic_latitude_semicircles**3
+        amplitude_ionospheric_delay = np.clip(amplitude_ionospheric_delay, a_min=0, a_max=None)
+
+
+        day = (5 * 1e-9 + amplitude_ionospheric_delay * (
+                    1 - phase_ionospheric_delay ** 2 / 2 + phase_ionospheric_delay ** 4 / 24)) * slant_factor
+        night = 5 * 1e-9 * slant_factor
+
+        ionospheric_delay_gps_l1 = np.where(np.abs(phase_ionospheric_delay) > 1.57, night, day)
+        ionospheric_delay = (GPS_L1_FREQUENCY / self.satellite_frequency) ** 2 * ionospheric_delay_gps_l1
+        return ionospheric_delay
+
     def _tropospheric_average_table(self, latitude):
         latitudes            = np.array([     15,      30,      45,      60,      75], dtype=np.float64)
         average_pressures    = np.array([1013.25, 1017.25, 1015.75, 1011.75, 1013.00], dtype=np.float64)
@@ -376,89 +444,61 @@ class Simulator:
 
         return delta_pressure, delta_temperature, delta_e, delta_beta, delta_lambda
 
-    def get_pseudoranges(self, player_position_ecef, reciever_clock_bias, time_gps):
-        player_position_llh = ecef2llh(player_position_ecef)
-        satellites_aer = np.array([ecef2aer(player_position_ecef, satellite_position) for satellite_position in self.satellite_positions])
-
-        # See https://insidegnss.com/auto/marapr15-WP.pdf
-        # And https://gssc.esa.int/navipedia/index.php/Klobuchar_Ionospheric_Model
-        # And GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
-        # TODO test with the orignial paper's example
-        azimuth_semicircles = rad2semicircles(satellites_aer[:, 0])
-        elevation_semicircles = rad2semicircles(satellites_aer[:, 1])
-
-        ec_angle = 0.0137 / (elevation_semicircles + 0.11) - 0.022
-
-        IPPs = player_position_llh[0] + ec_angle * np.cos(satellites_aer[:, 0])
-        IPPs = np.clip(IPPs, a_min=-0.416, a_max= 0.416)
-
-        IPP_lengths = player_position_llh[1] + (ec_angle * np.sin(azimuth_semicircles)) / np.cos(IPPs)
-
-        geomagnetic_latitude = IPPs + 0.064 * np.cos(IPP_lengths - 1.617)
-
-        time_IPP = 43_200 * IPP_lengths + time_gps
-        time_IPP[time_IPP >= 86_400] -= 86_400
-        time_IPP[time_IPP < 0] += 86_400
-
-        amplitude_ionospheric_delay = np.sum(self.satellite_alphas * geomagnetic_latitude.reshape((-1,1)) ** np.array([0,1,2,3]), axis=1)
-        amplitude_ionospheric_delay = np.clip(amplitude_ionospheric_delay, a_min=0, a_max=None)
-
-        period_ionospheric_delay = np.sum(self.satellite_betas * geomagnetic_latitude.reshape((-1,1)) ** np.array([0,1,2,3]), axis=1)
-        period_ionospheric_delay = np.clip(period_ionospheric_delay, a_min=72_000, a_max=None)
-
-        phase_ionospheric_delay = 2 * np.pi * (time_IPP - 50_400) / period_ionospheric_delay
-
-        slant_factor = 1 + 16 * (0.53 - elevation_semicircles) ** 3
-
-        day = (5 * 1e-9 + amplitude_ionospheric_delay * (1 - phase_ionospheric_delay ** 2 / 2 + phase_ionospheric_delay ** 4 / 24)) * slant_factor
-        night = 5 * 1e-9 * slant_factor
-
-        ionospheric_delay_gps_l1 = np.where(phase_ionospheric_delay < 1.57, day, night)
-        ionospheric_delay = (GPS_L1_FREQUENCY / self.satellite_frequency) ** 2 * ionospheric_delay_gps_l1
-
+    def _tropospheric_delay_calculation(self, player_position_ecef):
         # Troposferic delay is divided intro dry and wet and varies acording to satellite elevation (Saastamoinen model)
         # See https://gssc.esa.int/navipedia/index.php/Galileo_Tropospheric_Correction_Model
         # And Global Positioning System: Signals, Measurements, and Performance section 5.3.3
         # And GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
-        def tropospheric_delay_calculation(elevation):
+        player_position_llh = ecef2llh(player_position_ecef)
+        satellites_aer = np.array([ecef2aer(player_position_ecef, satellite_position) for satellite_position in self.satellite_positions])
+
+        def per_satelite_delay(elevation):
             if elevation <= np.deg2rad(5):
                 return 0
 
             player_latitude = np.abs(player_position_llh[0])
-            day_of_year = 0 # TODO this is a parameter
+            day_of_year = 0  # TODO this is a parameter
             northern = player_position_llh[0] > 0
             day_of_year_min = 28 if northern else 211
 
             elevation_effect = 1.001 / np.sqrt(0.002001 + np.sin(elevation) ** 2)
 
             season_multiplier = np.cos(2 * np.pi * (day_of_year - day_of_year_min) / 365.25)
-            average_pressure, average_temperature, average_e, average_beta, average_lambda = self._tropospheric_average_table(player_latitude)
-            delta_pressure, delta_temperature, delta_e, delta_beta, delta_lambda = self._tropospheric_deltas_table(player_latitude)
+            average_pressure, average_temperature, average_e, average_beta, average_lambda = self._tropospheric_average_table(
+                player_latitude)
+            delta_pressure, delta_temperature, delta_e, delta_beta, delta_lambda = self._tropospheric_deltas_table(
+                player_latitude)
 
-            pressure = average_pressure - delta_pressure * season_multiplier # mbar
-            temperature = average_temperature - delta_temperature * season_multiplier # K
-            e = average_e - delta_e * season_multiplier # mbar # vapour pressure
-            beta = average_beta - delta_beta * season_multiplier # K/m #  temperature "lapse" rate
-            l = average_lambda - delta_lambda * season_multiplier # 1 # water vapour "lapse" rate
+            pressure = average_pressure - delta_pressure * season_multiplier  # mbar
+            temperature = average_temperature - delta_temperature * season_multiplier  # K
+            e = average_e - delta_e * season_multiplier  # mbar # vapour pressure
+            beta = average_beta - delta_beta * season_multiplier  # K/m #  temperature "lapse" rate
+            l = average_lambda - delta_lambda * season_multiplier  # 1 # water vapour "lapse" rate
 
-            h = player_position_ecef[2] # m # height above mean-sea-level
+            h = player_position_ecef[2]  # m # height above mean-sea-level
 
-            k1 = 77.604 # K/mbar
-            k2 = 382_000 # K²/mbar
-            Rd = 287.054 # J / Kg / K
-            gm = 9.784 # m / s²
-            g = 9.80665 # m / s²
+            k1 = 77.604  # K/mbar
+            k2 = 382_000  # K²/mbar
+            Rd = 287.054  # J / Kg / K
+            gm = 9.784  # m / s²
+            g = 9.80665  # m / s²
 
             delay_0_dry = 1e-6 * k1 * Rd * pressure / gm
-            delay_0_wet = (1e-6 * k2 * Rd / ((l + 1) * gm - beta * Rd)) * (e/temperature)
+            delay_0_wet = (1e-6 * k2 * Rd / ((l + 1) * gm - beta * Rd)) * (e / temperature)
 
             base = 1 - beta * h / temperature
             delay_dry = base ** (g / (Rd * beta)) * delay_0_dry
-            delay_wet = base ** ((l+1)*g / (Rd * beta) - 1) * delay_0_wet
+            delay_wet = base ** ((l + 1) * g / (Rd * beta) - 1) * delay_0_wet
 
             return (delay_dry + delay_wet) * elevation_effect
 
-        tropospheric_delay = np.array([tropospheric_delay_calculation(elevation) for elevation in satellites_aer[:, 1]])
+        tropospheric_delay = np.array([per_satelite_delay(elevation) for elevation in satellites_aer[:, 1]])
+        return tropospheric_delay
+
+    def get_pseudoranges(self, player_position_ecef, reciever_clock_bias, time_gps):
+        ionospheric_delay = self._ionospheric_delay_calculation(player_position_ecef, time_gps)
+
+        tropospheric_delay = self._tropospheric_delay_calculation(player_position_ecef)
 
         # See GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
         bias_difference = scipy.constants.c * (reciever_clock_bias - self.satellite_clock_bias.reshape((-1)))
