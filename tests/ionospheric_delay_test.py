@@ -58,7 +58,7 @@ class IonosphericDelayTest(unittest.TestCase):
         # TODO paper example is broken self.assertAlmostEqual(delay[0], 77.6 * 1e-9, delta=TIME_PRECISION)
 
     def test_noaa(self):
-        # Test from https://geodesy.noaa.gov/gps-toolbox/ovstedal.htm
+        # Test from https://web.archive.org/web/20250209101059/https://geodesy.noaa.gov/gps-toolbox/ovstedal.htm
 
         receiver_ecef = np.array( [ -849_609.76, -4_818_376.38, 4_077_985.57 ]  , dtype=np.float64)
         receiver_llh = main.ecef2llh(receiver_ecef)
