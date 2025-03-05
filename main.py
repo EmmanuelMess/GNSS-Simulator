@@ -52,9 +52,10 @@ SATELLITE_CLOCK_BIAS = np.array([
 SATELLITE_NUMBER = SATELLITE_CLOCK_BIAS.shape[0]
 
 EARTH_MASS = M_earth.value
-SEMI_MAJOR_AXIS = 2.65603E+07
+SEMI_MAJOR_AXIS = 26_560_000
 
-SATELLITE_VELOCITY = np.sqrt(2 * scipy.constants.G * EARTH_MASS * ( 1 / MEO - 1 / (2 * SEMI_MAJOR_AXIS)))
+# From Vis-viva equation
+SATELLITE_VELOCITY = np.sqrt(scipy.constants.G * EARTH_MASS * ( 2 / MEO - 1 / SEMI_MAJOR_AXIS))
 
 SATELLITE_VELOCITY_VECTORS = np.array([
     [0, 0.445, np.sqrt(1-0.445**2)],
@@ -471,7 +472,7 @@ class Simulator:
         beta = average_beta - delta_beta * season_multiplier  # K/m #  temperature "lapse" rate
         l = average_lambda - delta_lambda * season_multiplier  # 1 # water vapour "lapse" rate
 
-        # TODO this is wrong, this has height over the sea, not the ellipsoid
+        # TODO this is wrong, this has height over the ellipsoid, but requires height over the sea
         h = position_llh[2]  # m # height above mean-sea-level
 
         k1 = 77.604  # K/mbar
