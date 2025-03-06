@@ -5,6 +5,13 @@ import numpy as np
 import main
 from tests.constants import *
 
+class DayOfYearTest(unittest.TestCase):
+    def test_trivial_0(self):
+        self.assertAlmostEqual(main.seconds2day_of_year(0), 6, delta=0.5)
+
+    def test_2024_01_01(self):
+        self.assertAlmostEqual(main.seconds2day_of_year(1388102418), 1, delta=0.25)
+
 class SemicirclesTest(unittest.TestCase):
     def test_trivial_0(self):
         self.assertEqual(main.rad2semicircles(0), 0)

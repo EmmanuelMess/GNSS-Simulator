@@ -91,6 +91,9 @@ RECEIVER_CLOCK_WALK = np.float64(1 * 1e-6)
 
 SATELLITE_NOISE_STD = np.float64(0.0)
 
+# This is the angle at which satellites start not being affected by troposferic effects
+CUTOFF_ANGLE = np.deg2rad(5)
+
 # This noise level does not affect the reciever, because it can correct for the noise
 NOISE_CORRECTION_LEVEL = np.float64(7) # dB
 # This noise level causes the receiver to lose the fix
@@ -170,6 +173,10 @@ def rad2semicircles(value):
 
 def semicircles2rad(value):
     return value * np.pi
+
+def seconds2day_of_year(value):
+    # The GPS epoch is not at the start of the year and the day should start at 1
+    return (((1 + 5) * 24 * 60 * 60 + value) / (24 * 60 *60)) % 365.25
 
 
 class Solver:
@@ -451,7 +458,7 @@ class Simulator:
         # And Assessment and Development of a Tropospheric Delay Model for Aircraft Users of the Global Positioning System
         # And GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
 
-        if satellite_elevation <= np.deg2rad(cutoff_angle):
+        if satellite_elevation <= cutoff_angle:
             return 0
 
         player_latitude = np.abs(position_llh[0])
@@ -514,7 +521,8 @@ class Simulator:
     def get_pseudoranges(self, player_position_ecef, reciever_clock_bias, time_gps):
         ionospheric_delay = self._ionospheric_delay_calculation(player_position_ecef, time_gps)
 
-        tropospheric_delay = self._tropospheric_delay_calculation(player_position_ecef, time_gps % (365.25 * 24 * 60 * 60))
+        day_of_year = seconds2day_of_year(time_gps)
+        tropospheric_delay = self._tropospheric_delay_calculation(player_position_ecef, day_of_year, CUTOFF_ANGLE)
 
         # See GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
         bias_difference = scipy.constants.c * (reciever_clock_bias - self.satellite_clock_bias.reshape((-1)))
@@ -530,7 +538,7 @@ class Simulator:
 
         # Noise from sources local to the antenna, helps to model interference
         # Extrapolated from GNSS interference mitigation: A measurement and position domain assessment
-        jammer = 30  # dB
+        jammer = 30 #self.rng.normal(30.0, 0.1)  # dB
 
         def correction(noiseLevel):
             if noiseLevel <= self.satellite_noise_std:
@@ -643,7 +651,7 @@ def main():
     solver = Solver(SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS, SATELLITE_VELOCITY_VECTORS, GNSS_SIGNAL_FREQUENCY)
     sensor = GnssSensor(simulator, solver)
 
-    player_positions: List[array3d] = [np.array([20, 20, 0], dtype=np.float64)]
+    player_positions: List[array3d] = [np.array([20, 20,  R_earth.value], dtype=np.float64)]
     player_velocities: List[array3d] = [np.array([0, 0, 0], dtype=np.float64)]
     gnss_positions: List[array3d] = []
     gnss_velocities: List[array3d] = []
