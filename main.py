@@ -538,13 +538,13 @@ class Simulator:
 
         # Noise from sources local to the antenna, helps to model interference
         # Extrapolated from GNSS interference mitigation: A measurement and position domain assessment
-        jammer = 30 #self.rng.normal(30.0, 0.1)  # dB
+        jammer = self.rng.normal(30.0, 0.1)  # dB
 
         def correction(noiseLevel):
-            if noiseLevel <= self.satellite_noise_std:
+            if noiseLevel <= self.noise_correction_level:
                 return 0
-            if self.satellite_noise_std < noiseLevel < self.noise_fix_loss_level:
-                return self.rng.normal(0.0, noiseLevel * self.noise_effect_rate)
+            if self.noise_correction_level < noiseLevel < self.noise_fix_loss_level:
+                return noiseLevel * self.noise_effect_rate
             if self.noise_fix_loss_level <= noiseLevel:
                 print("Too much noise")
                 return None
