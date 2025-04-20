@@ -1,12 +1,15 @@
 from typing import List, Tuple
+import datetime as dt
 
+from skyfield.api import load
+from skyfield.iokit import parse_tle_file
 from astropy.coordinates import SphericalRepresentation
 from astropy.constants import R_earth, M_earth
 import astropy.units as u
-import numpy as np
 import scipy
 from pyray import *
 from raylib import *
+from skyfield.sgp4lib import EarthSatellite
 
 from conversions import *
 
@@ -29,18 +32,6 @@ def getSatelliteAtAngle(lat, lon) -> array3d:
     northing = cartesian[2].value
     return np.array([easting, -northing, up])
 
-# Assume static satelites because orbital mechanics is hard
-# TODO implement http://grapenthin.org/teaching/geop555/LAB03_position_estimation.html
-SATELLITE_HEIGHT = 20_200_000
-SATELLITE_POSITIONS = np.array([
-    getSatelliteAtAngle(45 * u.deg, 0 * u.deg),
-    getSatelliteAtAngle(0 * u.deg, 45 * u.deg),
-    getSatelliteAtAngle(0 * u.deg, -45 * u.deg),
-    getSatelliteAtAngle(-45 * u.deg, 0 * u.deg),
-    getSatelliteAtAngle(-45 * u.deg, 60 * u.deg),
-    getSatelliteAtAngle(60 * u.deg, 60 * u.deg),
-], dtype=np.float64)
-
 SATELLITE_CLOCK_BIAS = np.array([
     5 * 1e-6,
     -10 * 1e-6,
@@ -54,18 +45,6 @@ SATELLITE_NUMBER = SATELLITE_CLOCK_BIAS.shape[0]
 
 EARTH_MASS = M_earth.value
 SEMI_MAJOR_AXIS = 26_560_000
-
-# From Vis-viva equation
-SATELLITE_VELOCITY = np.sqrt(scipy.constants.G * EARTH_MASS * ( 2 / MEO - 1 / SEMI_MAJOR_AXIS))
-
-SATELLITE_VELOCITY_VECTORS = np.array([
-    [0, 0.445, np.sqrt(1-0.445**2)],
-    [0, 0.583, np.sqrt(1-0.583**2)],
-    [0, 0.088, np.sqrt(1-0.088**2)],
-    [0, 0.981, np.sqrt(1-0.981**2)],
-    [0, 0.695, np.sqrt(1-0.695**2)],
-    [0, 0.095, np.sqrt(1-0.095**2)],
-], dtype=np.float64) * SATELLITE_VELOCITY
 
 SATELLITE_ALPHAS = np.array([
     [0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6],
@@ -109,15 +88,12 @@ GPS_L5_FREQUENCY = np.float64(1_176.45) * 1e6 # Hz
 GNSS_SIGNAL_FREQUENCY = GPS_L1_FREQUENCY
 
 class Solver:
-    def __init__(self, satellite_positions, satellite_clock_bias, satellite_velocities,
-                 satellite_frequencies):
-        self.satellite_positions = satellite_positions
+    def __init__(self, satellite_amount, satellite_clock_bias, satellite_frequencies):
+        self.satellite_amount = satellite_amount
         self.satellite_clock_bias = satellite_clock_bias
-        self.satellite_velocities = satellite_velocities
         self.satellite_frequencies = satellite_frequencies
-        self.satellite_number = satellite_positions.shape[0]
 
-    def solve_position(self, pseudorange, xtol):
+    def solve_position(self, satellite_positions_ecef, pseudorange, xtol):
         """
         A linearization of the pseudorange error, via a taylor aproximation, is minimized.
         But has problems on numerical precision (substracts large floating values)
@@ -136,13 +112,13 @@ class Solver:
                 break
 
             gnss_pseudorange_approximation = (
-                        np.linalg.norm(self.satellite_positions - gnss_position_aproximation, axis=1)
+                        np.linalg.norm(satellite_positions_ecef - gnss_position_aproximation, axis=1)
                         + (gnss_receiver_clock_bias_approximation - self.satellite_clock_bias * scipy.constants.c))
 
             delta_gnss_pseudorange = pseudorange.copy() - gnss_pseudorange_approximation
 
-            delta_satelites = gnss_position_aproximation - self.satellite_positions
-            cs = np.ones((1, self.satellite_number), dtype=np.float64)
+            delta_satelites = gnss_position_aproximation - satellite_positions_ecef
+            cs = np.ones((1, self.satellite_amount), dtype=np.float64)
 
             G = np.concatenate((delta_satelites / gnss_pseudorange_approximation.reshape((-1, 1)), cs.T), axis=1)
 
@@ -160,7 +136,7 @@ class Solver:
         return gnss_position_aproximation, gnss_receiver_clock_bias_approximation, np.linalg.norm(delta_gnss_pseudorange)
 
 
-    def solve_position_scipy(self, pseudorange, xtol):
+    def solve_position_scipy(self, satellite_positions_ecef, pseudorange, xtol):
         """
         A linearization of the pseudorange error, via scipy.optimize.least_squares
         This is an adaptation of getGnssPositionTaylor
@@ -169,7 +145,7 @@ class Solver:
         # TODO add satelite weighting
 
         def pseudoranges_approximation(gnss_position_aproximation, gnss_receiver_clock_bias_approximation):
-            return (np.linalg.norm(self.satellite_positions - gnss_position_aproximation, axis=1)
+            return (np.linalg.norm(satellite_positions_ecef - gnss_position_aproximation, axis=1)
                                         + (gnss_receiver_clock_bias_approximation - self.satellite_clock_bias * scipy.constants.c))
 
         def fun(x):
@@ -182,8 +158,8 @@ class Solver:
             gnss_position_aproximation = x[:3]
             gnss_receiver_clock_bias_approximation = x[-1]
 
-            delta_satelites = self.satellite_positions - gnss_position_aproximation
-            cs = np.ones((1, self.satellite_number), dtype=np.float64) * -1
+            delta_satelites = satellite_positions_ecef - gnss_position_aproximation
+            cs = np.ones((1, self.satellite_amount), dtype=np.float64) * -1
 
             approx = pseudoranges_approximation(gnss_position_aproximation, gnss_receiver_clock_bias_approximation)
 
@@ -198,7 +174,8 @@ class Solver:
 
         return gnss_position_aproximation, gnss_receiver_clock_bias_approximation, gnss_position_error
 
-    def solve_velocity(self, direct_doppler, receiver_position, xtol):
+    def solve_velocity(self, satellite_positions_ecef, satellite_velocities_ecef, direct_doppler, receiver_position,
+                       xtol):
         """
         A linearization of the pseudorange rate error, and least squares solutions
         From Global Positioning System section 6.2.1, adapted from getGnssPositionTaylor
@@ -217,15 +194,15 @@ class Solver:
             if gnss_velocity_error < xtol:
                 break
 
-            velocity_difference = gnss_velocity_aproximation - self.satellite_velocities
-            satellite_user_delta = self.satellite_positions - receiver_position
+            velocity_difference = gnss_velocity_aproximation - satellite_velocities_ecef
+            satellite_user_delta = satellite_positions_ecef - receiver_position
             satellite_line_of_sight = satellite_user_delta / np.linalg.norm(satellite_user_delta, axis=1).reshape((-1, 1))
             velocity_scalar_projection = np.sum(velocity_difference * satellite_line_of_sight, axis=1)
             pseudorange_rates_approximation = velocity_scalar_projection + gnss_receiver_clock_drift_approximation
 
             delta_gnss_pseudorange_rates = pseudorange_rates - pseudorange_rates_approximation
 
-            cs = np.ones((1, self.satellite_number), dtype=np.float64)
+            cs = np.ones((1, self.satellite_amount), dtype=np.float64)
 
             G = np.concatenate((satellite_line_of_sight, cs.T), axis=1)
 
@@ -241,7 +218,7 @@ class Solver:
         return gnss_velocity_aproximation, gnss_receiver_clock_drift_approximation, gnss_velocity_error
 
 
-    def solve_velocity_scipy(self, direct_doppler, receiver_position, xtol):
+    def solve_velocity_scipy(self, satellite_positions_ecef, satellite_velocities_ecef, direct_doppler, receiver_position, xtol):
         """
         A linearization of the pseudorange rate error, via scipy.optimize.least_squares
         This is an adaptation of getGnssPositionScipy
@@ -252,13 +229,13 @@ class Solver:
         pseudorange_rate = (- scipy.constants.c / self.satellite_frequencies) * direct_doppler
 
         def pseudorange_rates_approximation(gnss_velocity_aproximation, gnss_receiver_clock_drift_approximation):
-            rate_difference = gnss_velocity_aproximation - self.satellite_velocities
+            rate_difference = gnss_velocity_aproximation - satellite_velocities_ecef
 
-            line_of_sight = receiver_position - self.satellite_positions
+            line_of_sight = receiver_position - satellite_positions_ecef
             line_of_sight_unit = line_of_sight / np.linalg.norm(line_of_sight, axis=1).reshape((-1,1))
             velocity_scalar_projection = np.sum(rate_difference * line_of_sight_unit, axis=1)
 
-            clock_drift_effect = gnss_receiver_clock_drift_approximation - scipy.constants.c * self.satellite_clock_drift
+            clock_drift_effect = gnss_receiver_clock_drift_approximation
 
             return velocity_scalar_projection + clock_drift_effect
 
@@ -277,13 +254,11 @@ class Solver:
 
 
 class Simulator:
-    def __init__(self, rng, satellite_positions, satellite_clock_bias, satellite_velocities,
-                 satellite_frequency, satellite_alphas, satellite_betas, noise_correction_level, noise_fix_loss_level,
-                 noise_effect_rate, satellite_noise_std):
+    def __init__(self, rng, satellite_amount, satellite_clock_bias, satellite_frequency, satellite_alphas, satellite_betas,
+                 noise_correction_level, noise_fix_loss_level, noise_effect_rate, satellite_noise_std):
         self.rng = rng
-        self.satellite_positions = satellite_positions
+        self.satellite_amount = satellite_amount
         self.satellite_clock_bias = satellite_clock_bias
-        self.satellite_velocities = satellite_velocities
         self.satellite_frequency = satellite_frequency # TODO make a vector
         self.satellite_alphas = satellite_alphas
         self.satellite_betas = satellite_betas
@@ -291,15 +266,14 @@ class Simulator:
         self.noise_correction_level = noise_correction_level
         self.noise_fix_loss_level = noise_fix_loss_level
         self.noise_effect_rate = noise_effect_rate
-        self.satellite_amount = satellite_positions.shape[0]
 
-    def _ionospheric_delay_calculation(self, receiver_ecef, time_of_week_gps_seconds):
+    def _ionospheric_delay_calculation(self, satellite_positions_ecef, receiver_ecef, time_of_week_gps_seconds):
         # From https://gssc.esa.int/navipedia/index.php/Klobuchar_Ionospheric_Model
         # And GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
         # Reference implementation https://geodesy.noaa.gov/gps-toolbox/ovstedal/klobuchar.for
 
         receiver_llh = ecef2llh(receiver_ecef)
-        satellites_aer_rad = np.array([ecef2aer(receiver_ecef, satellite_position) for satellite_position in self.satellite_positions])
+        satellites_aer_rad = np.array([ecef2aer(receiver_ecef, satellite_position) for satellite_position in satellite_positions_ecef])
 
         if receiver_llh[1] < 0:
             receiver_llh[1] += 2 * np.pi # because for some reason the algorithm uses longitude in [0, 2*pi]
@@ -426,12 +400,12 @@ class Simulator:
 
         return (delay_dry + delay_wet) * elevation_effect
 
-    def _tropospheric_delay_calculation(self, position_ecef, day_of_year, cutoff_angle):
+    def _tropospheric_delay_calculation(self, satellite_positions_ecef, position_ecef, day_of_year, cutoff_angle):
         # Troposferic delay is divided intro dry and wet and varies acording to satellite elevation (Saastamoinen model)
         # And Global Positioning System: Signals, Measurements, and Performance section 5.3.3
 
         position_llh = ecef2llh(position_ecef)
-        satellites_aer = np.array([ecef2aer(position_ecef, satellite_position) for satellite_position in self.satellite_positions])
+        satellites_aer = np.array([ecef2aer(position_ecef, satellite_position) for satellite_position in satellite_positions_ecef])
 
         tropospheric_delay = np.array([self._per_satelite_tropospheric_delay(position_llh, elevation, day_of_year, cutoff_angle) for elevation in satellites_aer[:, 1]])
         return tropospheric_delay
@@ -447,15 +421,16 @@ class Simulator:
         return dry_delay, wet_delay
 
 
-    def get_pseudoranges(self, player_position_ecef, reciever_clock_bias, time_gps):
-        ionospheric_delay = self._ionospheric_delay_calculation(player_position_ecef, time_gps)
+    def get_pseudoranges(self, satellite_positions_ecef, player_position_ecef, reciever_clock_bias,
+                         time_gps, time_utc):
+        ionospheric_delay = self._ionospheric_delay_calculation(satellite_positions_ecef, player_position_ecef, time_gps)
 
         day_of_year = seconds2day_of_year(time_gps)
-        tropospheric_delay = self._tropospheric_delay_calculation(player_position_ecef, day_of_year, CUTOFF_ANGLE)
+        tropospheric_delay = self._tropospheric_delay_calculation(satellite_positions_ecef, player_position_ecef, day_of_year, CUTOFF_ANGLE)
 
         # See GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
         bias_difference = scipy.constants.c * (reciever_clock_bias - self.satellite_clock_bias.reshape((-1)))
-        range = np.linalg.norm(self.satellite_positions - player_position_ecef, axis=1).reshape((-1))
+        range = np.linalg.norm(satellite_positions_ecef - player_position_ecef, axis=1).reshape((-1))
 
         # Assume open field
         # From GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
@@ -484,11 +459,12 @@ class Simulator:
 
         return pseudorange
 
-    def get_doppler(self, player_position, player_velocity, receiver_clock_drift):
+    def get_doppler(self, satellite_positions_ecef, satellite_velocities_ecef, player_position, player_velocity,
+                    receiver_clock_drift, time_utc):
         # Doppler effect simulation
         # From GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.2
-        velocity_difference = player_velocity - self.satellite_velocities
-        satellite_user_delta = self.satellite_positions - player_position
+        velocity_difference = player_velocity - satellite_velocities_ecef
+        satellite_user_delta = satellite_positions_ecef - player_position
         satellite_line_of_sight = satellite_user_delta / np.linalg.norm(satellite_user_delta, axis=1).reshape((-1, 1))
         velocity_scalar_projection = np.sum(velocity_difference * satellite_line_of_sight, axis=1)
         velocity_base = velocity_scalar_projection * (self.satellite_frequency / scipy.constants.c)
@@ -501,10 +477,10 @@ class Simulator:
         direct_doppler = velocity_base + doppler_contribution_clock + epsilon
         return direct_doppler
 
-    def get_dilution_of_presition(self, player_position):
+    def get_dilution_of_presition(self, satellite_positions_ecef,  player_position):
         A = np.concatenate(
             (
-                (self.satellite_positions - player_position) / np.linalg.norm(self.satellite_positions - player_position,
+                (satellite_positions_ecef - player_position) / np.linalg.norm(satellite_positions_ecef - player_position,
                                                                          axis=1).reshape(
                     (-1, 1)),
                 np.ones((1, self.satellite_amount)).T),
@@ -525,20 +501,29 @@ class GnssSensor:
         self.solver = solver
 
 
-    def update(self, player_positions, player_velocities, reciever_clock_bias, reciever_clock_drift)\
-            -> Tuple[array3d, array3d, np.float64, np.float64]:
+    def update(self, satellite_positions_ecef, satellite_velocities_ecef, player_positions, player_velocities,
+               reciever_clock_bias, reciever_clock_drift, time_utc) -> Tuple[array3d, array3d, np.float64, np.float64]:
         print("===")
+        print("UTC time")
+        print(time_utc) # TODO
+
+        print("Satelite positions")
+        print(satellite_positions_ecef)
+
+        print("Satelite velocities")
+        print(satellite_velocities_ecef)
 
         player_position = player_positions[-1]
-        pseudoranges = self.simulator.get_pseudoranges(player_position, reciever_clock_bias, 0)
+        pseudoranges = self.simulator.get_pseudoranges(satellite_positions_ecef, player_position, reciever_clock_bias,
+                                                       0, time_utc)
 
         # Computation of the satellite orbit, from ephimeris
         # Assume satellite position is known because ephimeris is transmitted during the first fix
         # From https://gssc.esa.int/navipedia/index.php/Coordinates_Computation_from_Almanac_Data
         position_aproximation, clock_bias_approximation, gnss_position_error = (
-            self.solver.solve_position_scipy(pseudoranges, 1e-9))
+            self.solver.solve_position_scipy(satellite_positions_ecef, pseudoranges, 1e-9))
 
-        Q, gdop, hdop, vdop, pdop = self.simulator.get_dilution_of_presition(player_position)
+        Q, gdop, hdop, vdop, pdop = self.simulator.get_dilution_of_presition(satellite_positions_ecef, player_position)
 
         print(f"- Position")
         print(f"Cost {gnss_position_error}, estimated position {position_aproximation}m, estimated reciever clock bias {clock_bias_approximation}s")
@@ -546,13 +531,15 @@ class GnssSensor:
         print(f"Error {np.linalg.norm(position_aproximation-player_position)}m, real position {player_position}m, real reciever clock bias {reciever_clock_bias}s")
 
         player_velocity = player_velocities[-1]
-        direct_doppler = self.simulator.get_doppler(player_position, player_velocity, reciever_clock_drift)
+        direct_doppler = self.simulator.get_doppler(satellite_positions_ecef, satellite_velocities_ecef,
+                                                    player_position, player_velocity, reciever_clock_drift, time_utc)
 
         # Reciever estimation
         # From https://satellite-navigation.springeropen.com/counter/pdf/10.1186/s43020-023-00098-2.pdf
         # Also see Navigation from Low Earth Orbit – Part 2: Models, Implementation, and Performance section 2.2
         velocity_approximation, clock_drift_approximation, gnss_velocity_error = (
-            self.solver.solve_velocity(direct_doppler, position_aproximation, 1e-9))
+            self.solver.solve_velocity(satellite_positions_ecef, satellite_velocities_ecef, direct_doppler,
+                                       position_aproximation, 1e-9))
 
         print(f"- Velocity")
         print(f"Cost {gnss_velocity_error}, estimated velocity {velocity_approximation}m/s, linear velocity {np.linalg.norm(velocity_approximation)}m/s")
@@ -564,33 +551,46 @@ class GnssSensor:
 
 def main():
     width, height = 800, 450
-    init_window(width, height, "Hello")
 
-    print("Satelite positions")
-    print(SATELLITE_POSITIONS)
-    print("Satelite velocities")
-    print(SATELLITE_VELOCITY_VECTORS)
+    timescale = load.timescale()
+
+    with load.open('gps.tle') as file:
+        satellite_orbits = list(parse_tle_file(file, timescale))
+
+    print(f"Loaded {len(satellite_orbits)} satellites, cutting to {SATELLITE_NUMBER}")
+
+    satellite_orbits = satellite_orbits[:SATELLITE_NUMBER]
+
+    start_time = satellite_orbits[0].epoch
+
     print("Satelite clock biases")
     print(SATELLITE_CLOCK_BIAS)
 
     rng = np.random.default_rng()
-    simulator = Simulator(rng, SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS, SATELLITE_VELOCITY_VECTORS,
-                          GNSS_SIGNAL_FREQUENCY, SATELLITE_ALPHAS, SATELLITE_BETAS, NOISE_CORRECTION_LEVEL,
-                          NOISE_FIX_LOSS_LEVEL, NOISE_EFFECT_RATE, SATELLITE_NOISE_STD)
-    solver = Solver(SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS, SATELLITE_VELOCITY_VECTORS, GNSS_SIGNAL_FREQUENCY)
+    simulator = Simulator(rng, SATELLITE_NUMBER, SATELLITE_CLOCK_BIAS,GNSS_SIGNAL_FREQUENCY, SATELLITE_ALPHAS,
+                          SATELLITE_BETAS, NOISE_CORRECTION_LEVEL, NOISE_FIX_LOSS_LEVEL, NOISE_EFFECT_RATE,
+                          SATELLITE_NOISE_STD)
+    solver = Solver(SATELLITE_NUMBER, SATELLITE_CLOCK_BIAS, GNSS_SIGNAL_FREQUENCY)
     sensor = GnssSensor(simulator, solver)
 
+    time_utc = start_time
     player_positions: List[array3d] = [np.array([20, 20,  R_earth.value], dtype=np.float64)]
     player_velocities: List[array3d] = [np.array([0, 0, 0], dtype=np.float64)]
     gnss_positions: List[array3d] = []
     gnss_velocities: List[array3d] = []
     receiver_clock_bias = RECEIVER_CLOCK_BIAS
     time_since_gnss = np.inf
+    gnss_velocity_px = 0
 
+    init_window(width, height, "Hello")
     while not window_should_close():
         delta = get_frame_time()
 
+        time_utc += dt.timedelta(seconds=delta)
         time_since_gnss += delta
+
+        satellite_positions = np.array([satellite.at(time_utc).xyz.m for satellite in satellite_orbits], dtype=np.float64)
+        satellite_velocities = np.array([satellite.at(time_utc).velocity.m_per_s for satellite in satellite_orbits], dtype=np.float64)
 
         if is_key_down(KEY_LEFT) or is_key_down(KEY_A):
             player_delta_x = -1
@@ -617,8 +617,9 @@ def main():
             # See GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
             if time_since_gnss < np.inf:
                 receiver_clock_bias += RECEIVER_CLOCK_WALK * rng.normal() * time_since_gnss
-            gnss_position, gnss_velocity, _, _ = sensor.update(player_positions, player_velocities, receiver_clock_bias,
-                                                               RECEIVER_CLOCK_WALK)
+            gnss_position, gnss_velocity, _, _ = sensor.update(satellite_positions, satellite_velocities,
+                                                               player_positions, player_velocities, receiver_clock_bias,
+                                                               RECEIVER_CLOCK_WALK, time_utc)
             gnss_positions.append(gnss_position)
             gnss_velocities.append(gnss_velocity)
             time_since_gnss = 0
@@ -626,32 +627,35 @@ def main():
         player_position_px = player_position * METERS_TO_PIXELS
         gnss_velocity_px = gnss_velocities[-1] / MOVEMENT_SPEED_METERS_PER_SECOND * METERS_TO_PIXELS
 
-        begin_drawing()
-        clear_background(WHITE)
-        draw_circle_v(toVector2(player_position_px), 5, RED)
+        class _draw:
+            begin_drawing()
+            clear_background(WHITE)
+            draw_text(f"{time_utc.utc_datetime()}", 10, 10, 14, BLACK)
 
-        for gnss_position in gnss_positions:
-            draw_circle_v(toVector2(gnss_position * METERS_TO_PIXELS), 2, GREEN)
+            draw_circle_v(toVector2(player_position_px), 5, RED)
 
-        draw_line_v(toVector2(player_position_px), toVector2(player_position_px + gnss_velocity_px), BLUE)
+            for gnss_position in gnss_positions:
+                draw_circle_v(toVector2(gnss_position * METERS_TO_PIXELS), 2, GREEN)
+
+            draw_line_v(toVector2(player_position_px), toVector2(player_position_px + gnss_velocity_px), BLUE)
 
 
-        draw_rectangle(width - 200, 0, width, 200, WHITE)
+            draw_rectangle(width - 200, 0, width, 200, WHITE)
 
-        x = player_position
-        x = x / np.array([10_000, 10_000, 1])
-        x = x + np.array([width - 100, 100, 0])
-        draw_circle_v(toVector2(x), 2, RED)
-
-        for i, satellite_position in enumerate(SATELLITE_POSITIONS):
-            x = satellite_position
-            x = x / np.array([1e6, 1e6, 1e6])
+            x = player_position
+            x = x / np.array([10_000, 10_000, 1])
             x = x + np.array([width - 100, 100, 0])
-            draw_circle_v(toVector2(x), 2, GREEN)
-            draw_text(f"{i}", np.int64(x[0]).item(), np.int64(x[1]).item(), 2, BLACK)
-        draw_rectangle_lines(width - 200, 0, width, 200, BLACK)
+            draw_circle_v(toVector2(x), 2, RED)
 
-        end_drawing()
+            for i, satellite_position in enumerate(satellite_positions):
+                x = satellite_position
+                x = x / np.array([1e6, 1e6, 1e6])
+                x = x + np.array([width - 100, 100, 0])
+                draw_circle_v(toVector2(x), 2, GREEN)
+                draw_text(f"{i}", np.int64(x[0]).item(), np.int64(x[1]).item(), 1, BLACK)
+            draw_rectangle_lines(width - 200, 0, width, 200, BLACK)
+
+            end_drawing()
     close_window()
 
 if __name__ == '__main__':

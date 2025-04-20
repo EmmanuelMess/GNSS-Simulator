@@ -1,5 +1,5 @@
 import numpy as np
-from raylib import Vector2
+from pyray import Vector2
 
 array3d = np.ndarray[(2,), np.float64]
 
