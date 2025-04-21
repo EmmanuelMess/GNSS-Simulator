@@ -580,7 +580,7 @@ def main():
     visible_satellite_orbits = [satellite for satellite in satellite_orbits if prn_from_name.get_prn(satellite.name) in prn_visible]
     cut_satellite_orbits = visible_satellite_orbits[:SATELLITE_NUMBER]
     start_time = timescale.utc(2025, 4, 19, 9, 0, 0)
-    start_receiver_position = wgs84.latlon(0.0, 0.0).at(time_utc).xyz.m
+    start_receiver_position = wgs84.latlon(0.0, 0.0).at(start_time).xyz.m
 
     print(f"Loaded {len(satellite_orbits)} satellites, {len(visible_satellite_orbits)} visible, cut to {SATELLITE_NUMBER}")
     print([satellite.name for satellite in cut_satellite_orbits])
@@ -646,7 +646,7 @@ def main():
             gnss_velocities.append(gnss_velocity)
             time_since_gnss = 0
 
-        player_position_px = player_position * METERS_TO_PIXELS
+        player_position_px = (player_position - start_receiver_position) * METERS_TO_PIXELS
         gnss_velocity_px = gnss_velocities[-1] / MOVEMENT_SPEED_METERS_PER_SECOND * METERS_TO_PIXELS
 
         class _draw:
@@ -657,7 +657,7 @@ def main():
             draw_circle_v(toVector2(player_position_px), 5, RED)
 
             for gnss_position in gnss_positions:
-                draw_circle_v(toVector2(gnss_position * METERS_TO_PIXELS), 2, GREEN)
+                draw_circle_v(toVector2((gnss_position - start_receiver_position) * METERS_TO_PIXELS), 2, GREEN)
 
             draw_line_v(toVector2(player_position_px), toVector2(player_position_px + gnss_velocity_px), BLUE)
 
