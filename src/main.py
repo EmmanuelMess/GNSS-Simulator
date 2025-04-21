@@ -1,4 +1,5 @@
-from typing import List, Tuple
+from dataclasses import dataclass
+from typing import List, Tuple, Optional
 import datetime as dt
 
 import numpy as np
@@ -21,6 +22,8 @@ from constants import GPS_L1_FREQUENCY
 PIXELS_TO_METERS = 1/10
 METERS_TO_PIXELS = 1/PIXELS_TO_METERS
 MOVEMENT_SPEED_METERS_PER_SECOND = 5.0
+SKYPLOT_SIZE = 200
+
 GNSS_MESSAGE_FREQUENCY = 5 # Hz
 CUTOFF_ELEVATION = np.deg2rad(10)
 
@@ -74,6 +77,40 @@ NOISE_EFFECT_RATE = np.float64(5) / (NOISE_FIX_LOSS_LEVEL - NOISE_CORRECTION_LEV
 
 GNSS_SIGNAL_FREQUENCY = GPS_L1_FREQUENCY
 
+@dataclass
+class Skyplot:
+    prns: List[int]
+    satellite_positions: List[Tuple[int, int]]
+    sixty_deg_line: int
+    thirty_deg_line: int
+    zero_deg_line: int
+
+
+def get_skyplot(receiver_position_ecef, satellite_positions_ecef, satellite_prns, width, height,
+                elevation_cutoff_rad: np.float64) -> Skyplot:
+    def convert_altitude(elevation):
+        return -(elevation - np.deg2rad(90)) / np.deg2rad(90) * (width//2) * 0.90
+
+    skyplot_prns = []
+    skyplot_positions = []
+
+    for prn, satellite_position_ecef in zip(satellite_prns, satellite_positions_ecef):
+        satellite_position_aer = ecef2aer(receiver_position_ecef, satellite_position_ecef)
+        azimuth, elevation = satellite_position_aer[0], satellite_position_aer[1]
+        if elevation < elevation_cutoff_rad:
+            continue
+
+        skyplot_length = convert_altitude(elevation)
+        skyplot_x = np.cos(azimuth - np.deg2rad(90)) * skyplot_length + width//2
+        skyplot_y = np.sin(azimuth - np.deg2rad(90)) * skyplot_length + height//2
+
+        skyplot_prns.append(prn)
+        skyplot_positions.append((np.int64(skyplot_x).item(), np.int64(skyplot_y).item()))
+
+    return Skyplot(skyplot_prns, skyplot_positions, convert_altitude(np.deg2rad(60)), convert_altitude(np.deg2rad(30)),
+                   convert_altitude(np.deg2rad(0)))
+
+
 def main():
     width, height = 800, 450
 
@@ -86,11 +123,12 @@ def main():
 
     visible_satellite_orbits = [satellite for satellite in satellite_orbits if prn_from_name.get_prn(satellite.name) in prn_visible]
     cut_satellite_orbits = visible_satellite_orbits[:SATELLITE_NUMBER]
+    satellite_prns = [prn_from_name.get_prn(satellite.name) for satellite in cut_satellite_orbits]
     start_time = timescale.utc(2025, 4, 19, 9, 0, 0)
     start_receiver_position = wgs84.latlon(0.0, 0.0).at(start_time).xyz.m
 
     print(f"Loaded {len(satellite_orbits)} satellites, {len(visible_satellite_orbits)} visible, cut to {SATELLITE_NUMBER}")
-    print([satellite.name for satellite in cut_satellite_orbits])
+    print(satellite_prns)
     print(f"Sim start time: {start_time.utc_datetime()}")
     print(f"Satellite positions: {[list(np.round(np.rad2deg(ecef2llh(satellite.at(start_time).xyz.m)))) for satellite in cut_satellite_orbits]}")
     print(f"Satellite velocities: {[satellite.at(start_time).velocity.m_per_s for satellite in cut_satellite_orbits]}")
@@ -156,6 +194,8 @@ def main():
         player_position_px = (player_position - start_receiver_position) * METERS_TO_PIXELS
         gnss_velocity_px = gnss_velocities[-1] / MOVEMENT_SPEED_METERS_PER_SECOND * METERS_TO_PIXELS
 
+        skyplot = get_skyplot(player_position, satellite_positions, satellite_prns, SKYPLOT_SIZE, SKYPLOT_SIZE, np.deg2rad(10))
+
         class _draw:
             begin_drawing()
             clear_background(WHITE)
@@ -168,21 +208,19 @@ def main():
 
             draw_line_v(toVector2(player_position_px), toVector2(player_position_px + gnss_velocity_px), BLUE)
 
+            draw_rectangle(width - SKYPLOT_SIZE, 0, width, SKYPLOT_SIZE, WHITE)
+            draw_line(width - SKYPLOT_SIZE, SKYPLOT_SIZE//2, width,  SKYPLOT_SIZE//2, GRAY)
+            draw_line(width - SKYPLOT_SIZE//2, 0, width - SKYPLOT_SIZE//2, SKYPLOT_SIZE, GRAY)
+            draw_circle_lines(width - SKYPLOT_SIZE//2, SKYPLOT_SIZE//2, skyplot.sixty_deg_line, GRAY)
+            draw_circle_lines(width - SKYPLOT_SIZE//2, SKYPLOT_SIZE//2, skyplot.thirty_deg_line, GRAY)
+            draw_circle_lines(width - SKYPLOT_SIZE//2, SKYPLOT_SIZE//2, skyplot.zero_deg_line, GRAY)
 
-            draw_rectangle(width - 200, 0, width, 200, WHITE)
+            for prn, satellite_position_px in zip(skyplot.prns, skyplot.satellite_positions):
+                x, y = satellite_position_px
+                draw_circle(x + (width - SKYPLOT_SIZE), y, 2, GREEN)
+                draw_text(f"{prn}", x + (width - SKYPLOT_SIZE), y, 1, BLACK)
 
-            x = player_position
-            x = x / np.array([10_000, 10_000, 1])
-            x = x + np.array([width - 100, 100, 0])
-            draw_circle_v(toVector2(x), 2, RED)
-
-            for i, satellite_position in enumerate(satellite_positions):
-                x = satellite_position
-                x = x / np.array([1e6, 1e6, 1e6])
-                x = x + np.array([width - 100, 100, 0])
-                draw_circle_v(toVector2(x), 2, GREEN)
-                draw_text(f"{i}", np.int64(x[0]).item(), np.int64(x[1]).item(), 1, BLACK)
-            draw_rectangle_lines(width - 200, 0, width, 200, BLACK)
+            draw_rectangle_lines(width - SKYPLOT_SIZE, 0, width, SKYPLOT_SIZE, BLACK)
 
             end_drawing()
     close_window()
