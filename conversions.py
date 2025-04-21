@@ -1,7 +1,7 @@
 import numpy as np
 from pyray import Vector2
 
-array3d = np.ndarray[(2,), np.float64]
+array3d = np.ndarray[(3,), np.float64]
 
 def toVector2(array: array3d) -> Vector2:
     return Vector2(array[0].item(), array[1].item())

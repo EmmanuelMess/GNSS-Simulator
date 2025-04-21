@@ -1,9 +1,14 @@
 import unittest
 
 import numpy as np
+from skyfield.api import load
+from skyfield.iokit import parse_tle_file
+from skyfield.toposlib import wgs84
 
 import main
 from tests.constants import *
+from prn_from_name import get_prn
+
 
 class DayOfYearTest(unittest.TestCase):
     def test_trivial_0(self):
@@ -120,6 +125,51 @@ class AerTest(unittest.TestCase):
         self.assertAlmostEqual(np.rad2deg(aer[0]), 24.8012, delta=AZIMUTH_PRECISION)
         self.assertAlmostEqual(np.rad2deg(aer[1]), 14.6185, delta=ELEVATION_PRECISION)
         self.assertAlmostEqual(aer[2], 36_271_632.7, delta=RANGE_PRECISION)
+
+    def test_2(self):
+        # We use a list of satellites visible from 0° 00' 00" N 0° 00' 00" E at 2025-04-19 9:00 UTC
+        # Rough estimates of skyplot obtained from gnssplanning.com
+
+        prn_visible = [27, 31, 29, 28, 25, 18, 32, 23, 10]
+        receiver_position = wgs84.latlon(0.0, 0.0)
+
+        timescale = load.timescale()
+        time_utc = timescale.utc(2025, 4, 19, 9, 0, 0)
+
+        with load.open('gps.tle') as file:
+            satellite_orbits = {
+                get_prn(satellite.name): satellite for satellite in list(parse_tle_file(file, timescale))
+            }
+
+        satellite_elevations_gt = {
+            prn: (satellite - receiver_position).at(time_utc).altaz()[0].radians for prn, satellite in satellite_orbits.items()
+        }
+
+        satellite_positions = {
+            prn: np.array(satellite.at(time_utc).xyz.m, dtype=np.float64) for prn, satellite in satellite_orbits.items()
+        }
+
+        satellite_positions_aer = {
+            prn: main.ecef2aer(receiver_position.at(time_utc).xyz.m, satellite_position) for prn, satellite_position in
+            satellite_positions.items()
+        }
+
+        for prn in satellite_orbits.keys():
+            self.assertAlmostEqual(satellite_positions_aer[prn][1], satellite_elevations_gt[prn], delta=np.deg2rad(1))
+
+        for prn in prn_visible:
+            self.assertGreaterEqual(satellite_positions_aer[prn][1], np.deg2rad(10))
+
+        for prn in satellite_orbits.keys() - prn_visible:
+            self.assertLess(satellite_positions_aer[prn][1], np.deg2rad(10))
+
+        self.assertGreaterEqual(satellite_positions_aer[18][1], np.deg2rad(60))
+        self.assertGreaterEqual(satellite_positions_aer[28][1], np.deg2rad(50))
+        self.assertGreaterEqual(satellite_positions_aer[32][1], np.deg2rad(30))
+        self.assertGreaterEqual(satellite_positions_aer[23][1], np.deg2rad(30))
+
+        for prn in [29, 25, 27, 10]:
+            self.assertGreaterEqual(satellite_positions_aer[prn][1], np.deg2rad(10))
 
 if __name__ == '__main__':
     unittest.main()

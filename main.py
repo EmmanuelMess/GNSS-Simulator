@@ -1,6 +1,7 @@
 from typing import List, Tuple
 import datetime as dt
 
+import numpy as np
 from skyfield.api import load
 from skyfield.iokit import parse_tle_file
 from astropy.coordinates import SphericalRepresentation
@@ -9,14 +10,16 @@ import astropy.units as u
 import scipy
 from pyray import *
 from raylib import *
-from skyfield.sgp4lib import EarthSatellite
+from skyfield.toposlib import wgs84
 
+import prn_from_name
 from conversions import *
 
 PIXELS_TO_METERS = 1/10
 METERS_TO_PIXELS = 1/PIXELS_TO_METERS
 MOVEMENT_SPEED_METERS_PER_SECOND = 5.0
 GNSS_MESSAGE_FREQUENCY = 5 # Hz
+CUTOFF_ELEVATION = np.deg2rad(10)
 
 tau = np.pi * 2
 
@@ -422,7 +425,7 @@ class Simulator:
 
 
     def get_pseudoranges(self, satellite_positions_ecef, player_position_ecef, reciever_clock_bias,
-                         time_gps, time_utc):
+                         time_gps):
         ionospheric_delay = self._ionospheric_delay_calculation(satellite_positions_ecef, player_position_ecef, time_gps)
 
         day_of_year = seconds2day_of_year(time_gps)
@@ -460,7 +463,7 @@ class Simulator:
         return pseudorange
 
     def get_doppler(self, satellite_positions_ecef, satellite_velocities_ecef, player_position, player_velocity,
-                    receiver_clock_drift, time_utc):
+                    receiver_clock_drift):
         # Doppler effect simulation
         # From GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.2
         velocity_difference = player_velocity - satellite_velocities_ecef
@@ -501,11 +504,20 @@ class GnssSensor:
         self.solver = solver
 
 
+    def _filter_by_elevation(self, player_position_ecef, satellite_positions_ecef):
+        """
+        Filter satellites that are below the horizon
+        """
+        satellite_positions_aer = np.array([ecef2aer(player_position_ecef, satellite_position) for satellite_position in satellite_positions_ecef])
+
+        return satellite_positions_ecef[satellite_positions_aer[:,1] > CUTOFF_ELEVATION, :]
+
+
     def update(self, satellite_positions_ecef, satellite_velocities_ecef, player_positions, player_velocities,
                reciever_clock_bias, reciever_clock_drift, time_utc) -> Tuple[array3d, array3d, np.float64, np.float64]:
         print("===")
         print("UTC time")
-        print(time_utc) # TODO
+        print(time_utc.utc_datetime()) # TODO
 
         print("Satelite positions")
         print(satellite_positions_ecef)
@@ -513,17 +525,23 @@ class GnssSensor:
         print("Satelite velocities")
         print(satellite_velocities_ecef)
 
+        # TODO check if satellites are over the horizon
         player_position = player_positions[-1]
-        pseudoranges = self.simulator.get_pseudoranges(satellite_positions_ecef, player_position, reciever_clock_bias,
-                                                       0, time_utc)
+
+        visible_satellite_positions_ecef = self._filter_by_elevation(player_position, satellite_positions_ecef)
+
+        print(f"{visible_satellite_positions_ecef.shape[0]}/{satellite_positions_ecef.shape[0]} satellites over the horizon")
+
+        pseudoranges = self.simulator.get_pseudoranges(visible_satellite_positions_ecef, player_position,
+                                                       reciever_clock_bias, 0)
 
         # Computation of the satellite orbit, from ephimeris
         # Assume satellite position is known because ephimeris is transmitted during the first fix
         # From https://gssc.esa.int/navipedia/index.php/Coordinates_Computation_from_Almanac_Data
         position_aproximation, clock_bias_approximation, gnss_position_error = (
-            self.solver.solve_position_scipy(satellite_positions_ecef, pseudoranges, 1e-9))
+            self.solver.solve_position_scipy(visible_satellite_positions_ecef, pseudoranges, 1e-9))
 
-        Q, gdop, hdop, vdop, pdop = self.simulator.get_dilution_of_presition(satellite_positions_ecef, player_position)
+        Q, gdop, hdop, vdop, pdop = self.simulator.get_dilution_of_presition(visible_satellite_positions_ecef, player_position)
 
         print(f"- Position")
         print(f"Cost {gnss_position_error}, estimated position {position_aproximation}m, estimated reciever clock bias {clock_bias_approximation}s")
@@ -531,14 +549,14 @@ class GnssSensor:
         print(f"Error {np.linalg.norm(position_aproximation-player_position)}m, real position {player_position}m, real reciever clock bias {reciever_clock_bias}s")
 
         player_velocity = player_velocities[-1]
-        direct_doppler = self.simulator.get_doppler(satellite_positions_ecef, satellite_velocities_ecef,
-                                                    player_position, player_velocity, reciever_clock_drift, time_utc)
+        direct_doppler = self.simulator.get_doppler(visible_satellite_positions_ecef, satellite_velocities_ecef,
+                                                    player_position, player_velocity, reciever_clock_drift)
 
         # Reciever estimation
         # From https://satellite-navigation.springeropen.com/counter/pdf/10.1186/s43020-023-00098-2.pdf
         # Also see Navigation from Low Earth Orbit – Part 2: Models, Implementation, and Performance section 2.2
         velocity_approximation, clock_drift_approximation, gnss_velocity_error = (
-            self.solver.solve_velocity(satellite_positions_ecef, satellite_velocities_ecef, direct_doppler,
+            self.solver.solve_velocity(visible_satellite_positions_ecef, satellite_velocities_ecef, direct_doppler,
                                        position_aproximation, 1e-9))
 
         print(f"- Velocity")
@@ -552,19 +570,24 @@ class GnssSensor:
 def main():
     width, height = 800, 450
 
+    prn_visible = [27, 31, 29, 28, 25, 18, 32, 23, 10]
+
     timescale = load.timescale()
 
     with load.open('gps.tle') as file:
         satellite_orbits = list(parse_tle_file(file, timescale))
 
-    print(f"Loaded {len(satellite_orbits)} satellites, cutting to {SATELLITE_NUMBER}")
+    visible_satellite_orbits = [satellite for satellite in satellite_orbits if prn_from_name.get_prn(satellite.name) in prn_visible]
+    cut_satellite_orbits = visible_satellite_orbits[:SATELLITE_NUMBER]
+    start_time = timescale.utc(2025, 4, 19, 9, 0, 0)
+    start_receiver_position = wgs84.latlon(0.0, 0.0).at(time_utc).xyz.m
 
-    satellite_orbits = satellite_orbits[:SATELLITE_NUMBER]
-
-    start_time = satellite_orbits[0].epoch
-
-    print("Satelite clock biases")
-    print(SATELLITE_CLOCK_BIAS)
+    print(f"Loaded {len(satellite_orbits)} satellites, {len(visible_satellite_orbits)} visible, cut to {SATELLITE_NUMBER}")
+    print([satellite.name for satellite in cut_satellite_orbits])
+    print(f"Sim start time: {start_time.utc_datetime()}")
+    print(f"Satellite positions: {[list(np.round(np.rad2deg(ecef2llh(satellite.at(start_time).xyz.m)))) for satellite in cut_satellite_orbits]}")
+    print(f"Satellite velocities: {[satellite.at(start_time).velocity.m_per_s for satellite in cut_satellite_orbits]}")
+    print(f"Satelite clock biases: {SATELLITE_CLOCK_BIAS}")
 
     rng = np.random.default_rng()
     simulator = Simulator(rng, SATELLITE_NUMBER, SATELLITE_CLOCK_BIAS,GNSS_SIGNAL_FREQUENCY, SATELLITE_ALPHAS,
@@ -574,13 +597,12 @@ def main():
     sensor = GnssSensor(simulator, solver)
 
     time_utc = start_time
-    player_positions: List[array3d] = [np.array([20, 20,  R_earth.value], dtype=np.float64)]
+    player_positions: List[array3d] = [start_receiver_position]
     player_velocities: List[array3d] = [np.array([0, 0, 0], dtype=np.float64)]
     gnss_positions: List[array3d] = []
     gnss_velocities: List[array3d] = []
     receiver_clock_bias = RECEIVER_CLOCK_BIAS
     time_since_gnss = np.inf
-    gnss_velocity_px = 0
 
     init_window(width, height, "Hello")
     while not window_should_close():
@@ -589,8 +611,8 @@ def main():
         time_utc += dt.timedelta(seconds=delta)
         time_since_gnss += delta
 
-        satellite_positions = np.array([satellite.at(time_utc).xyz.m for satellite in satellite_orbits], dtype=np.float64)
-        satellite_velocities = np.array([satellite.at(time_utc).velocity.m_per_s for satellite in satellite_orbits], dtype=np.float64)
+        satellite_positions = np.array([satellite.at(time_utc).xyz.m for satellite in cut_satellite_orbits], dtype=np.float64)
+        satellite_velocities = np.array([satellite.at(time_utc).velocity.m_per_s for satellite in cut_satellite_orbits], dtype=np.float64)
 
         if is_key_down(KEY_LEFT) or is_key_down(KEY_A):
             player_delta_x = -1
