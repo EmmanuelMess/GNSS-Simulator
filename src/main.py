@@ -14,7 +14,7 @@ from skyfield.toposlib import wgs84
 
 import prn_from_name
 from conversions import *
-from simulator import Simulator
+from antenna_simulator import AntennaSimulator
 from gnss_sensor import GnssSensor
 from solver import Solver
 from constants import GPS_L1_FREQUENCY
@@ -135,9 +135,9 @@ def main():
     print(f"Satelite clock biases: {SATELLITE_CLOCK_BIAS}")
 
     rng = np.random.default_rng()
-    simulator = Simulator(rng, SATELLITE_NUMBER, SATELLITE_CLOCK_BIAS, GNSS_SIGNAL_FREQUENCY, SATELLITE_ALPHAS,
-                          SATELLITE_BETAS, NOISE_CORRECTION_LEVEL, NOISE_FIX_LOSS_LEVEL, NOISE_EFFECT_RATE,
-                          SATELLITE_NOISE_STD, TROPOSPHERIC_CUTOFF_ANGLE)
+    simulator = AntennaSimulator(rng, SATELLITE_NUMBER, SATELLITE_CLOCK_BIAS, GNSS_SIGNAL_FREQUENCY, SATELLITE_ALPHAS,
+                                 SATELLITE_BETAS, NOISE_CORRECTION_LEVEL, NOISE_FIX_LOSS_LEVEL, NOISE_EFFECT_RATE,
+                                 SATELLITE_NOISE_STD, TROPOSPHERIC_CUTOFF_ANGLE)
     solver = Solver(SATELLITE_NUMBER, SATELLITE_CLOCK_BIAS, GNSS_SIGNAL_FREQUENCY)
     sensor = GnssSensor(simulator, solver, CUTOFF_ELEVATION)
 

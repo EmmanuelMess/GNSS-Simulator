@@ -2,13 +2,13 @@ from typing import Tuple
 
 import numpy as np
 
-from simulator import Simulator
+from antenna_simulator import AntennaSimulator
 from solver import Solver
 from conversions import ecef2aer, array3d
 
 
 class GnssSensor:
-    def __init__(self, simulator: Simulator, solver: Solver, cutoff_elevation_rad: np.float64):
+    def __init__(self, simulator: AntennaSimulator, solver: Solver, cutoff_elevation_rad: np.float64):
         self.simulator = simulator
         self.solver = solver
         self.cutoff_elevation_rad = cutoff_elevation_rad

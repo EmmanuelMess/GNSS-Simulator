@@ -5,7 +5,7 @@ from conversions import ecef2llh, rad2semicircles, ecef2aer, semicircles2rad, se
 from constants import GPS_L1_FREQUENCY
 
 
-class Simulator:
+class AntennaSimulator:
     def __init__(self, rng, satellite_amount, satellite_clock_bias, satellite_frequency, satellite_alphas, satellite_betas,
                  noise_correction_level, noise_fix_loss_level, noise_effect_rate, satellite_noise_std,
                  tropospheric_cutoff_angle):

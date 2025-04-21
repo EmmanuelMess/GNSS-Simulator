@@ -16,9 +16,9 @@ class TrosposphericModelTest(unittest.TestCase):
         self.assertAlmostEqual(np.rad2deg(position_llh[1]), -58.139861, delta=1e-5)
         self.assertAlmostEqual(position_llh[2], 42.085, delta=1)
 
-        simulator = main.Simulator(None, np.array([]), None, None,
-                                   None, None, None,None,
-                                   None, None, None)
+        simulator = main.AntennaSimulator(None, np.array([]), None, None,
+                                          None, None, None, None,
+                                          None, None, None)
 
         # Atmospheric data from SMN, Argentina
         # Vapor pressure of water from CRC Handbook of Chemistry and Physics, 85th Edition
