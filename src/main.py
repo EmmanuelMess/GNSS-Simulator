@@ -5,11 +5,13 @@ from pathlib import Path
 from typing import List, Tuple
 import datetime as dt
 
+import astropy.time
 from skyfield.api import load
 from skyfield.iokit import parse_tle_file
 from pyray import *
 from raylib import *
 from skyfield.sgp4lib import EarthSatellite
+from skyfield.timelib import Time
 from skyfield.toposlib import wgs84
 
 import prn_from_name
@@ -113,17 +115,13 @@ def get_skyplot(receiver_position_ecef, satellite_positions_ecef, satellite_prns
 
 
 def create_rinex_generator(start_position_ecef, satellite_orbits: List[EarthSatellite],
-                           satellite_clock_biases: List[np.float64]) -> RinexGenerator:
+                           satellite_clock_biases: List[np.float64], utc_start: Time, gps_start: astropy.time.TimeGPS)\
+        -> RinexGenerator:
     folder_name = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     folder_path = os.path.join("output", folder_name)
     Path(folder_path).mkdir(parents=False, exist_ok=True)
 
-    time_of_first_observation = min([orbit.epoch for orbit in satellite_orbits])
-    time_of_last_observation = max([orbit.epoch for orbit in satellite_orbits])
-
-    rinex_generator = RinexGenerator(folder_path, start_position_ecef, time_of_first_observation, time_of_last_observation,
-                          len(satellite_orbits))
-
+    rinex_generator = RinexGenerator(folder_path, start_position_ecef, utc_start, gps_start, len(satellite_orbits))
 
     rinex_generator.add_satellites(satellite_orbits, satellite_clock_biases)
 
@@ -145,6 +143,8 @@ def main():
     satellite_prns = [prn_from_name.get_prn(satellite.name) for satellite in cut_satellite_orbits]
     start_time = timescale.utc(2025, 4, 19, 9, 0, 0)
     start_receiver_position = wgs84.latlon(0.0, 0.0).at(start_time).xyz.m
+    gps_start_time = start_time.to_astropy()
+    gps_start_time.format = "gps"
 
     print(f"Loaded {len(satellite_orbits)} satellites, {len(visible_satellite_orbits)} visible, cut to {SATELLITE_NUMBER}")
     print(satellite_prns)
@@ -154,7 +154,8 @@ def main():
     print(f"Satelite clock biases: {SATELLITE_CLOCK_BIAS}")
 
     rng = np.random.default_rng()
-    rinex_generator = create_rinex_generator(start_receiver_position, cut_satellite_orbits, list(SATELLITE_CLOCK_BIAS))
+    rinex_generator = create_rinex_generator(start_receiver_position, cut_satellite_orbits, list(SATELLITE_CLOCK_BIAS),
+                                             start_time, gps_start_time)
     simulator = AntennaSimulator(rng, SATELLITE_NUMBER, SATELLITE_CLOCK_BIAS, GNSS_SIGNAL_FREQUENCY, SATELLITE_ALPHAS,
                                  SATELLITE_BETAS, NOISE_CORRECTION_LEVEL, NOISE_FIX_LOSS_LEVEL, NOISE_EFFECT_RATE,
                                  SATELLITE_NOISE_STD, TROPOSPHERIC_CUTOFF_ANGLE)
@@ -205,10 +206,9 @@ def main():
             if time_since_gnss < np.inf:
                 receiver_clock_bias += RECEIVER_CLOCK_WALK * rng.normal() * time_since_gnss
 
-            time_of_week_gps = time_gps2seconds_of_week(time_utc.to_astropy().gps)
             gnss_position, gnss_velocity, _, _ = sensor.update(satellite_positions, satellite_velocities,
                                                                player_positions, player_velocities, receiver_clock_bias,
-                                                               RECEIVER_CLOCK_WALK, time_of_week_gps, time_utc)
+                                                               RECEIVER_CLOCK_WALK, time_utc.to_astropy(), time_utc)
             gnss_positions.append(gnss_position)
             gnss_velocities.append(gnss_velocity)
             time_since_gnss = 0

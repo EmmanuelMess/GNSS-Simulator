@@ -2,6 +2,7 @@ import os
 from typing import List
 
 import numpy as np
+from astropy.time import TimeGPS
 from skyfield.sgp4lib import EarthSatellite
 from skyfield.timelib import Time
 
@@ -15,21 +16,20 @@ class RinexGenerator:
     RINEX can only be generated with GPS data
     """
 
-    def __init__(self, folder: os.path, approximate_start_position: array3d, time_of_first_observation: Time,
-                 time_of_last_observation: Time, satellite_amount: int):
+    def __init__(self, folder: os.path, approximate_start_position: array3d, utc_start: Time, gps_start: TimeGPS,
+                 satellite_amount: int):
         self.folder = folder
 
         # TODO make it auto close the files
 
         # TODO check if the week number starts at 0
-        file_name = f"{time_of_first_observation.tt_strftime('%Y%m%d%H%M%S')}.{time_of_first_observation.tt_strftime('%W')}"
+        file_name = f"{utc_start.tt_strftime('%Y%m%d%H%M%S')}.{utc_start.tt_strftime('%W')}"
 
         self.navigation_file = open(os.path.join(folder, f"{file_name}P"), "w") #TODO fix name
         self.observations_file = open(os.path.join(folder, f"{file_name}O"), "w") #TODO fix name
 
         self._write_header_navigation_file()
-        self._write_header_observations_file(approximate_start_position, time_of_first_observation,
-                                             time_of_last_observation, satellite_amount)
+        self._write_header_observations_file(approximate_start_position, gps_start, satellite_amount)
 
 
     def _write_header_navigation_file(self):
@@ -42,13 +42,12 @@ class RinexGenerator:
         # TODO do we need this? self.navigation_file.write(f"    {leap_seconds: <18}                                     LEAP SECONDS        \n")
         self.navigation_file.write(f"                                                            END OF HEADER       \n")
 
-    def _write_header_observations_file(self, approximate_start_position: array3d, time_of_first_observation: Time,
-                                        time_of_last_observation: Time, satellite_amount: int):
+    def _write_header_observations_file(self, approximate_start_position: array3d, time_of_first_observation: TimeGPS,
+                                        satellite_amount: int):
         position_x = np.round(approximate_start_position[0], 4)
         position_y = np.round(approximate_start_position[1], 4)
         position_z = np.round(approximate_start_position[2], 4)
-        start_timestamp_str = time_of_first_observation.tt_strftime(format='  %Y   %m   %d   %H   %M   %S.%f')
-        end_timestamp_str = time_of_last_observation.tt_strftime(format='  %Y   %m   %d   %H   %M   %S.%f')
+        start_timestamp_str = time_of_first_observation.strftime('  %Y   %m   %d   %H   %M   %S.%f')
 
         self.observations_file.write(f"     3.03           OBSERVATION DATA    G: GPS              RINEX VERSION / TYPE\n")
         self.observations_file.write(f"GnssSim CIFASIS                         20231226 160817 UTC PGM / RUN BY / DATE \n")
@@ -61,7 +60,6 @@ class RinexGenerator:
         self.observations_file.write(f"        0.0000        0.0000        0.0000                  ANTENNA: DELTA H/E/N\n") # TODO know what these are
         self.observations_file.write(f"G    2 C1C  D1C                                             SYS / # / OBS TYPES \n") # TODO check that it is C code-based
         self.observations_file.write(f" {start_timestamp_str: <26}         GPS         TIME OF FIRST OBS   \n")
-        self.observations_file.write(f" {end_timestamp_str: <26}         GPS         TIME OF LAST OBS    \n")
         self.observations_file.write(f"G                                                           SYS / PHASE SHIFT   \n")
         self.observations_file.write(f"  0                                                         GLONASS SLOT / FRQ #\n")
         self.observations_file.write(f"                                                            GLONASS COD/PHS/BIS \n") # TODO check this is valid
@@ -134,10 +132,10 @@ class RinexGenerator:
         for satellite, satellite_clock_bias in zip(satellites, satellite_clock_biases):
             self._add_satellite(satellite, satellite_clock_bias)
 
-    def add_position(self, time_utc: Time, prns: List[int], pseudoranges: List[np.float64],
+    def add_position(self, time_gps: TimeGPS, prns: List[int], pseudoranges: List[np.float64],
                      direct_doppler: List[np.float64]):
         observed_satellites = len(pseudoranges)
-        time = time_utc.utc_strftime("%Y %m %d %H %M %S.%f")
+        time = time_gps.strftime("%Y %m %d %H %M %S.%f")
 
         self.observations_file.write(f"> {time:<27} 0 {observed_satellites:<2}                     \n") # TODO check if this should be the UTC clock or the GPS clock
 
