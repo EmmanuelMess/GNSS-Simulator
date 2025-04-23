@@ -1,16 +1,21 @@
-from typing import Tuple
+from typing import Tuple, List
 
 import numpy as np
+from skyfield.timelib import Time
 
 from antenna_simulator import AntennaSimulator
 from solver import Solver
 from conversions import ecef2aer, array3d
+from src.rinex_generator import RinexGenerator
 
 
 class GnssSensor:
-    def __init__(self, simulator: AntennaSimulator, solver: Solver, cutoff_elevation_rad: np.float64):
+    def __init__(self, simulator: AntennaSimulator, solver: Solver, rinex_generator: RinexGenerator,
+                 prn_satellites: np.ndarray[(-1,), np.int64], cutoff_elevation_rad: np.float64):
         self.simulator = simulator
         self.solver = solver
+        self.rinex_generator = rinex_generator
+        self.prn_satellites = prn_satellites
         self.cutoff_elevation_rad = cutoff_elevation_rad
 
 
@@ -18,16 +23,20 @@ class GnssSensor:
         """
         Filter satellites that are below the horizon
         """
+
         satellite_positions_aer = np.array([ecef2aer(player_position_ecef, satellite_position) for satellite_position in satellite_positions_ecef])
 
-        return satellite_positions_ecef[satellite_positions_aer[:,1] > self.cutoff_elevation_rad, :]
+        return satellite_positions_aer[:,1] > self.cutoff_elevation_rad
 
 
     def update(self, satellite_positions_ecef, satellite_velocities_ecef, player_positions, player_velocities,
-               reciever_clock_bias, reciever_clock_drift, time_utc) -> Tuple[array3d, array3d, np.float64, np.float64]:
+               reciever_clock_bias, reciever_clock_drift, time_of_week_gps_seconds: np.float64, time_utc: Time)\
+            -> Tuple[array3d, array3d, np.float64, np.float64]:
         print("===")
+        print("GPS time of week")
+        print(time_of_week_gps_seconds)
         print("UTC time")
-        print(time_utc.utc_datetime()) # TODO
+        print(time_utc.utc_datetime())
 
         print("Satelite positions")
         print(satellite_positions_ecef)
@@ -38,12 +47,15 @@ class GnssSensor:
         # TODO check if satellites are over the horizon
         player_position = player_positions[-1]
 
-        visible_satellite_positions_ecef = self._filter_by_elevation(player_position, satellite_positions_ecef)
+        visible_index = self._filter_by_elevation(player_position, satellite_positions_ecef)
+
+        visible_satellite_positions_ecef = satellite_positions_ecef[visible_index, :]
+        visible_satellites_prn = self.prn_satellites[visible_index]
 
         print(f"{visible_satellite_positions_ecef.shape[0]}/{satellite_positions_ecef.shape[0]} satellites over the horizon")
 
         pseudoranges = self.simulator.get_pseudoranges(visible_satellite_positions_ecef, player_position,
-                                                       reciever_clock_bias, 0)
+                                                       reciever_clock_bias, time_of_week_gps_seconds)
 
         # Computation of the satellite orbit, from ephimeris
         # Assume satellite position is known because ephimeris is transmitted during the first fix
@@ -73,5 +85,7 @@ class GnssSensor:
         print(f"Cost {gnss_velocity_error}, estimated velocity {velocity_approximation}m/s, linear velocity {np.linalg.norm(velocity_approximation)}m/s")
         print(f"Estimated receiver clock drift {clock_drift_approximation}s")
         print(f"Error {np.linalg.norm(velocity_approximation-player_velocity)}m/s, real velocity {player_velocity}m/s, linear_velocity {np.linalg.norm(player_velocity)}m/s")
+
+        self.rinex_generator.add_position(time_utc, list(visible_satellites_prn), list(pseudoranges), list(direct_doppler))
 
         return position_aproximation, velocity_approximation, clock_bias_approximation, clock_drift_approximation

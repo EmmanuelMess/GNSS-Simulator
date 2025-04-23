@@ -176,10 +176,11 @@ class AntennaSimulator:
 
 
     def get_pseudoranges(self, satellite_positions_ecef, player_position_ecef, reciever_clock_bias,
-                         time_gps):
-        ionospheric_delay = self._ionospheric_delay_calculation(satellite_positions_ecef, player_position_ecef, time_gps)
+                         time_of_week_gps_seconds):
+        ionospheric_delay = self._ionospheric_delay_calculation(satellite_positions_ecef, player_position_ecef,
+                                                                time_of_week_gps_seconds)
 
-        day_of_year = seconds2day_of_year(time_gps)
+        day_of_year = seconds2day_of_year(time_of_week_gps_seconds)
         tropospheric_delay = self._tropospheric_delay_calculation(satellite_positions_ecef, player_position_ecef, day_of_year)
 
         # See GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1

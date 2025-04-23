@@ -1,7 +1,7 @@
 import numpy as np
 from pyray import Vector2
 
-array3d = np.ndarray[(3,), np.float64]
+from numpy_types import array3d
 
 def toVector2(array: array3d) -> Vector2:
     return Vector2(array[0].item(), array[1].item())
@@ -73,3 +73,25 @@ def semicircles2rad(value):
 def seconds2day_of_year(value):
     # The GPS epoch is not at the start of the year and the day should start at 1
     return (((1 + 5) * 24 * 60 * 60 + value) / (24 * 60 *60)) % 365.25
+
+def rev_per_day2rad_per_second(value):
+    return 2 * np.pi / (24*60*60)
+
+def time_gps2seconds_of_week(time_gps: np.float64) -> np.float64:
+    """
+    Given a time in seconds since GPS epoch, returns the seconds in the week. This can be done this way because the GPS
+    time is aligned with the start of the week
+    """
+    seconds_in_week = 7 * 24 * 60 * 60
+
+    return time_gps % seconds_in_week
+
+
+def time_gps2week_number(time_gps: np.float64) -> int:
+    """
+    Given a time in seconds since GPS epoch, returns the amount of weeks since GPS epoch. This can be done this way
+    because the GPS time is aligned with the start of the week
+    """
+    seconds_in_week = 7 * 24 * 60 * 60
+
+    return np.int64(np.floor(time_gps / seconds_in_week)).item()
