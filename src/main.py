@@ -70,6 +70,8 @@ SATELLITE_NOISE_STD = np.float64(0.0)
 # This is the angle at which satellites start not being affected by troposferic effects
 TROPOSPHERIC_CUTOFF_ANGLE = np.deg2rad(5)
 
+JAMMER_NOISE = np.float64(0) # 30 # dB
+
 # This noise level does not affect the reciever, because it can correct for the noise
 NOISE_CORRECTION_LEVEL = np.float64(7) # dB
 # This noise level causes the receiver to lose the fix
@@ -157,8 +159,8 @@ def main():
     rinex_generator = create_rinex_generator(start_receiver_position, cut_satellite_orbits, list(SATELLITE_CLOCK_BIAS),
                                              start_time, gps_start_time)
     simulator = AntennaSimulator(rng, SATELLITE_NUMBER, SATELLITE_CLOCK_BIAS, GNSS_SIGNAL_FREQUENCY, SATELLITE_ALPHAS,
-                                 SATELLITE_BETAS, NOISE_CORRECTION_LEVEL, NOISE_FIX_LOSS_LEVEL, NOISE_EFFECT_RATE,
-                                 SATELLITE_NOISE_STD, TROPOSPHERIC_CUTOFF_ANGLE)
+                                 SATELLITE_BETAS, JAMMER_NOISE, NOISE_CORRECTION_LEVEL, NOISE_FIX_LOSS_LEVEL,
+                                 NOISE_EFFECT_RATE, SATELLITE_NOISE_STD, TROPOSPHERIC_CUTOFF_ANGLE)
     solver = Solver(SATELLITE_NUMBER, SATELLITE_CLOCK_BIAS, GNSS_SIGNAL_FREQUENCY)
     sensor = GnssSensor(simulator, solver, rinex_generator, np.array(satellite_prns, dtype=np.int64), CUTOFF_ELEVATION)
 

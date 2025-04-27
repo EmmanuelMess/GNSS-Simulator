@@ -6,9 +6,9 @@ from constants import GPS_L1_FREQUENCY
 
 
 class AntennaSimulator:
-    def __init__(self, rng, satellite_amount, satellite_clock_bias, satellite_frequency, satellite_alphas, satellite_betas,
-                 noise_correction_level, noise_fix_loss_level, noise_effect_rate, satellite_noise_std,
-                 tropospheric_cutoff_angle):
+    def __init__(self, rng, satellite_amount, satellite_clock_bias, satellite_frequency, satellite_alphas,
+                 satellite_betas, jammer_noise: np.float64, noise_correction_level, noise_fix_loss_level,
+                 noise_effect_rate, satellite_noise_std, tropospheric_cutoff_angle):
         self.rng = rng
         self.satellite_amount = satellite_amount
         self.satellite_clock_bias = satellite_clock_bias
@@ -16,6 +16,7 @@ class AntennaSimulator:
         self.satellite_alphas = satellite_alphas
         self.satellite_betas = satellite_betas
         self.satellite_noise_std = satellite_noise_std
+        self.jammer_noise = jammer_noise
         self.noise_correction_level = noise_correction_level
         self.noise_fix_loss_level = noise_fix_loss_level
         self.noise_effect_rate = noise_effect_rate
@@ -197,7 +198,7 @@ class AntennaSimulator:
 
         # Noise from sources local to the antenna, helps to model interference
         # Extrapolated from GNSS interference mitigation: A measurement and position domain assessment
-        jammer = self.rng.normal(30.0, 0.1)  # dB
+        jammer = self.rng.normal(self.jammer_noise, 0.1)  # dB
 
         def correction(noiseLevel):
             if noiseLevel <= self.noise_correction_level:
