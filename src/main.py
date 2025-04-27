@@ -172,7 +172,7 @@ def main():
     receiver_clock_bias = RECEIVER_CLOCK_BIAS
     time_since_gnss = np.inf
 
-    init_window(width, height, "Hello")
+    init_window(width, height, "GNSS Simulator Prototype")
     while not window_should_close():
         delta = get_frame_time()
 
