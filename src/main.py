@@ -21,6 +21,7 @@ from gnss_sensor import GnssSensor
 from solver import Solver
 from constants import GPS_L1_FREQUENCY
 from rinex_generator import RinexGenerator
+from src.is_overhead import is_satellite_overhead
 
 PIXELS_TO_METERS = 1/10
 METERS_TO_PIXELS = 1/PIXELS_TO_METERS
@@ -131,24 +132,23 @@ def create_rinex_generator(start_position_ecef, satellite_orbits: List[EarthSate
 def main():
     width, height = 800, 450
 
-    preselect_prns = [27, 31, 29, 28, 25, 18, 32, 23, 10]
-
     timescale = load.timescale()
-
-    with load.open('resources/gps.tle') as file:
-        satellite_orbits = list(parse_tle_file(file, timescale))
-
-    visible_satellite_orbits = [satellite for satellite in satellite_orbits if prn_from_name.get_prn(satellite.name) in preselect_prns]
-    cut_satellite_orbits = visible_satellite_orbits[:SATELLITE_NUMBER]
-    satellite_prns = [prn_from_name.get_prn(satellite.name) for satellite in cut_satellite_orbits]
-    start_time = timescale.utc(2025, 4, 19, 9, 0, 0)
+    start_time = timescale.utc(2025, 4, 19, 11, 0, 0)
     start_receiver_position = wgs84.latlon(0.0, 0.0).at(start_time).xyz.m
     gps_start_time = start_time.to_astropy()
     gps_start_time.format = "gps"
 
+    with load.open('resources/gps_falseepoch.tle') as file:
+        satellite_orbits = list(parse_tle_file(file, timescale))
+
+    visible_satellite_orbits = [satellite for satellite in satellite_orbits if is_satellite_overhead(start_receiver_position, satellite.at(start_time).xyz.m, CUTOFF_ELEVATION)]
+    cut_satellite_orbits = visible_satellite_orbits[:SATELLITE_NUMBER]
+    satellite_prns = [prn_from_name.get_prn(satellite.name) for satellite in cut_satellite_orbits]
+
     print(f"Loaded {len(satellite_orbits)} satellites, {len(visible_satellite_orbits)} visible, cut to {SATELLITE_NUMBER}")
     print(satellite_prns)
     print(f"Sim start time: {start_time.utc_datetime()}")
+    print(f"Satellite epochs: {[satellite.epoch.utc_strftime() for satellite in cut_satellite_orbits]}")
     print(f"Satellite positions: {[list(np.round(np.rad2deg(ecef2llh(satellite.at(start_time).xyz.m)))) for satellite in cut_satellite_orbits]}")
     print(f"Satellite velocities: {[satellite.at(start_time).velocity.m_per_s for satellite in cut_satellite_orbits]}")
     print(f"Satelite clock biases: {SATELLITE_CLOCK_BIAS}")

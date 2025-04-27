@@ -7,6 +7,7 @@ from skyfield.timelib import Time
 from antenna_simulator import AntennaSimulator
 from solver import Solver
 from conversions import ecef2aer, array3d, time_gps2seconds_of_week
+from src.is_overhead import is_satellite_overhead
 from src.rinex_generator import RinexGenerator
 
 
@@ -18,17 +19,6 @@ class GnssSensor:
         self.rinex_generator = rinex_generator
         self.prn_satellites = prn_satellites
         self.cutoff_elevation_rad = cutoff_elevation_rad
-
-
-    def _filter_by_elevation(self, player_position_ecef, satellite_positions_ecef):
-        """
-        Filter satellites that are below the horizon
-        """
-
-        satellite_positions_aer = np.array([ecef2aer(player_position_ecef, satellite_position) for satellite_position in satellite_positions_ecef])
-
-        return satellite_positions_aer[:,1] > self.cutoff_elevation_rad
-
 
     def update(self, satellite_positions_ecef, satellite_velocities_ecef, player_positions, player_velocities,
                reciever_clock_bias, reciever_clock_drift, time_gps: TimeGPS, time_utc: Time)\
@@ -50,7 +40,10 @@ class GnssSensor:
 
         time_of_week_gps_seconds = time_gps2seconds_of_week(time_utc.to_astropy().gps)
 
-        visible_index = self._filter_by_elevation(player_position, satellite_positions_ecef)
+        visible_index = np.array([
+            is_satellite_overhead(player_position, satellite_position, self.cutoff_elevation_rad)
+            for satellite_position in satellite_positions_ecef
+        ])
 
         visible_satellite_positions_ecef = satellite_positions_ecef[visible_index, :]
         visible_satellites_prn = self.prn_satellites[visible_index]
