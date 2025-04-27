@@ -132,14 +132,16 @@ def create_rinex_generator(start_position_ecef, satellite_orbits: List[EarthSate
 
 
 def main():
+    # Implementation specific constants
     width, height = 800, 450
-
+    rng = np.random.default_rng()
     timescale = load.timescale()
-    start_time = timescale.utc(2025, 4, 19, 11, 0, 0)
-    start_receiver_position = wgs84.latlon(0.0, 0.0).at(start_time).xyz.m
+    start_time = timescale.utc(2025, 4, 19, 9, 0, 0) # TODO move to the other constants as a string
+    start_receiver_position = wgs84.latlon(0.0, 0.0).at(start_time).xyz.m # TODO move to the other constants as lat long height
     gps_start_time = start_time.to_astropy()
     gps_start_time.format = "gps"
 
+    # Get satellites, filter by availability
     with load.open('resources/gps_falseepoch.tle') as file:
         satellite_orbits = list(parse_tle_file(file, timescale))
 
@@ -155,15 +157,16 @@ def main():
     print(f"Satellite velocities: {[satellite.at(start_time).velocity.m_per_s for satellite in cut_satellite_orbits]}")
     print(f"Satelite clock biases: {SATELLITE_CLOCK_BIAS}")
 
-    rng = np.random.default_rng()
     rinex_generator = create_rinex_generator(start_receiver_position, cut_satellite_orbits, list(SATELLITE_CLOCK_BIAS),
                                              start_time, gps_start_time)
+    # Position simulation components
     simulator = AntennaSimulator(rng, SATELLITE_NUMBER, SATELLITE_CLOCK_BIAS, GNSS_SIGNAL_FREQUENCY, SATELLITE_ALPHAS,
                                  SATELLITE_BETAS, JAMMER_NOISE, NOISE_CORRECTION_LEVEL, NOISE_FIX_LOSS_LEVEL,
                                  NOISE_EFFECT_RATE, SATELLITE_NOISE_STD, TROPOSPHERIC_CUTOFF_ANGLE)
     solver = Solver(SATELLITE_NUMBER, SATELLITE_CLOCK_BIAS, GNSS_SIGNAL_FREQUENCY)
     sensor = GnssSensor(simulator, solver, rinex_generator, np.array(satellite_prns, dtype=np.int64), CUTOFF_ELEVATION)
 
+    # State
     time_utc = start_time
     player_positions: List[array3d] = [start_receiver_position]
     player_velocities: List[array3d] = [np.array([0, 0, 0], dtype=np.float64)]
