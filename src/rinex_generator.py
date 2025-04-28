@@ -16,8 +16,7 @@ class RinexGenerator:
     RINEX can only be generated with GPS data
     """
 
-    def __init__(self, folder: os.path, approximate_start_position: array3d, utc_start: Time, gps_start: TimeGPS,
-                 satellite_amount: int):
+    def __init__(self, folder: os.path, approximate_start_position: array3d, utc_start: Time, gps_start: TimeGPS):
         self.folder = folder
 
         # TODO make it auto close the files
@@ -29,7 +28,7 @@ class RinexGenerator:
         self.observations_file = open(os.path.join(folder, f"{file_name}O"), "w") #TODO fix name
 
         self._write_header_navigation_file()
-        self._write_header_observations_file(approximate_start_position, utc_start, gps_start, satellite_amount)
+        self._write_header_observations_file(approximate_start_position, utc_start, gps_start)
 
 
     def _write_header_navigation_file(self):
@@ -43,32 +42,30 @@ class RinexGenerator:
         self.navigation_file.write(f"                                                            END OF HEADER       \n")
 
     def _write_header_observations_file(self, approximate_start_position: array3d, time_utc: Time,
-                                        time_of_first_observation: TimeGPS,
-                                        satellite_amount: int):
+                                        time_of_first_observation: TimeGPS):
         position_x = np.round(approximate_start_position[0], 4)
         position_y = np.round(approximate_start_position[1], 4)
         position_z = np.round(approximate_start_position[2], 4)
 
         time_utc_str = f"{time_utc.utc_strftime('%Y%m%d')} {time_utc.utc_strftime('%H%M%S')} UTC"
 
-        reformatted_seconds = np.float64(time_of_first_observation.strftime("%S.%f"))
-        start_timestamp_str = f"{time_of_first_observation.strftime('  %Y   %m   %d   %H   %M')}   {reformatted_seconds:2.7f}"
+        reformatted_seconds = f"{np.float64(time_of_first_observation.strftime('%S.%f')): 2.7f}"
+        start_timestamp_str = f"{time_of_first_observation.strftime(' %Y    %m    %d    %H    %M')}   {reformatted_seconds:>10}"
 
         self.observations_file.write(f"     3.03           OBSERVATION DATA    G: GPS              RINEX VERSION / TYPE\n")
-        self.observations_file.write(f"GnssSim             CIFASIS                 {time_utc_str} PGM / RUN BY / DATE \n")
+        self.observations_file.write(f"GnssSim             CIFASIS             {time_utc_str: >19} PGM / RUN BY / DATE \n")
         self.observations_file.write(f"                                                            MARKER NAME         \n")
         self.observations_file.write(f"GROUND_CRAFT                                                MARKER TYPE         \n")
         self.observations_file.write(f"CIFASIS                                                     OBSERVER / AGENCY   \n")
         self.observations_file.write(f"                    GnssSim Simulator                       REC # / TYPE / VERS \n")
         self.observations_file.write(f"                                                            ANT # / TYPE        \n") # TODO add info
-        self.observations_file.write(f" {position_x: <13} {position_y: <13} {position_z: <13}      APPROX POSITION XYZ \n")
+        self.observations_file.write(f" {position_x: >13} {position_y: >13} {position_z: >13}                  APPROX POSITION XYZ \n")
         self.observations_file.write(f"        0.0000        0.0000        0.0000                  ANTENNA: DELTA H/E/N\n") # TODO know what these are
         self.observations_file.write(f"G    2 C1C  D1C                                             SYS / # / OBS TYPES \n") # TODO check that it is C code-based
         self.observations_file.write(f" {start_timestamp_str: <26}     GPS         TIME OF FIRST OBS   \n")
         self.observations_file.write(f"G                                                           SYS / PHASE SHIFT   \n")
         self.observations_file.write(f"  0                                                         GLONASS SLOT / FRQ #\n")
         self.observations_file.write(f"                                                            GLONASS COD/PHS/BIS \n") # TODO check this is valid
-        self.observations_file.write(f" {satellite_amount: <23}                                    # OF SATELLITES     \n")
         self.observations_file.write(f"                                                            END OF HEADER       \n")
 
     def _add_satellite(self, satellite: EarthSatellite, satellite_clock_bias: np.float64):
@@ -149,4 +146,4 @@ class RinexGenerator:
         for prn, pseudorange, doppler in zip(prns, pseudoranges, direct_doppler):
             pseudorange_str = f"{pseudorange:.3f}"
             doppler_str = f"{doppler:.3f}"
-            self.observations_file.write(f"G{prn:<2} {pseudorange_str:<13}   {doppler_str:<13}   \n")
+            self.observations_file.write(f"G{prn:>2} {pseudorange_str:>13}   {doppler_str:>13}   \n")

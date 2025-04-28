@@ -92,7 +92,7 @@ def create_rinex_generator(start_position_ecef, satellite_orbits: List[EarthSate
     folder_path = os.path.join("output", folder_name)
     Path(folder_path).mkdir(parents=False, exist_ok=True)
 
-    rinex_generator = RinexGenerator(folder_path, start_position_ecef, utc_start, gps_start, len(satellite_orbits))
+    rinex_generator = RinexGenerator(folder_path, start_position_ecef, utc_start, gps_start)
 
     rinex_generator.add_satellites(satellite_orbits, satellite_clock_biases)
 
