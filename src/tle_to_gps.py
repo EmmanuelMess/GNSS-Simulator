@@ -54,8 +54,11 @@ def convert_tle_to_gps_parameters(satellite: EarthSatellite, satellite_clock_bia
     gps_week_time = time_gps2seconds_of_week(gps_time.value)
     gps_week_number = time_gps2week_number(gps_time.value)
 
-    semi_major_axis = MU_EARTH ** (1/3) / (rev_per_day2rad_per_second(tle.no_kozai) ** (2/3))
-    sqrt_semi_major_axis = np.sqrt(semi_major_axis)
+    # The equation implemented for sqrt_semi_major_axis is this but better numerically:
+    # semi_major_axis = MU_EARTH ** (1/3) / (rev_per_day2rad_per_second(tle.no_kozai) ** (2/3))
+    # sqrt_semi_major_axis = np.sqrt(semi_major_axis)
+    mean_motion = rev_per_day2rad_per_second(np.float64(tle.no_kozai))
+    sqrt_semi_major_axis = np.pow(np.sqrt(MU_EARTH) / mean_motion, 1/3)
 
     # In a few places a trick is used because the TLE assumes that the parameters stay constant, so some parameters
     # that are variable in time from GPS orbital parameters are assumed constant
@@ -74,7 +77,7 @@ def convert_tle_to_gps_parameters(satellite: EarthSatellite, satellite_clock_bia
         eccentricity=tle.ecco,
         amplitude_of_sine_harmonic_correction_term_to_argument_of_latitude=np.float64(0),
         square_root_of_semi_major_axis=sqrt_semi_major_axis,
-        time_of_ephemeris=gps_week_time,
+        time_of_ephemeris=np.float64(gps_week_time),
         amplitude_of_cosine_harmonic_correction_term_to_angle_of_inclination=np.float64(0),
         longitude_of_ascending_node_of_orbit_plane_at_weekly_epoch=tle.nodeo,
         amplitude_of_sine_harmonic_correction_term_to_angle_of_inclination=np.float64(0),
@@ -90,6 +93,6 @@ def convert_tle_to_gps_parameters(satellite: EarthSatellite, satellite_clock_bia
         sv_health=np.float64(0),
         tgd_total_group_delay=np.float64(0),
         iodc_issue_of_data_clock=np.float64(0),
-        transmission_time_of_message=gps_week_time,
+        transmission_time_of_message=np.float64(gps_week_time),
         fit_interval_in_hours=np.float64(4),
     )
