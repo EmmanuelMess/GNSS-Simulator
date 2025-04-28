@@ -56,12 +56,12 @@ class RinexGenerator:
         self.observations_file.write(f"GnssSim             CIFASIS             {time_utc_str: >19} PGM / RUN BY / DATE \n")
         self.observations_file.write(f"                                                            MARKER NAME         \n")
         self.observations_file.write(f"GROUND_CRAFT                                                MARKER TYPE         \n")
-        self.observations_file.write(f"CIFASIS                                                     OBSERVER / AGENCY   \n")
+        self.observations_file.write(f"CIFASIS                                                     OBSERVER / AGENCY   \n") # TODO move agency to correct column, add observer
         self.observations_file.write(f"                    GnssSim Simulator                       REC # / TYPE / VERS \n")
         self.observations_file.write(f"                                                            ANT # / TYPE        \n") # TODO add info
         self.observations_file.write(f" {position_x: >13} {position_y: >13} {position_z: >13}                  APPROX POSITION XYZ \n")
         self.observations_file.write(f"        0.0000        0.0000        0.0000                  ANTENNA: DELTA H/E/N\n") # TODO know what these are
-        self.observations_file.write(f"G    2 C1C  D1C                                             SYS / # / OBS TYPES \n") # TODO check that it is C code-based
+        self.observations_file.write(f"G    3 C1C  D1C  S1C                                        SYS / # / OBS TYPES \n") # TODO check that it is C code-based
         self.observations_file.write(f" {start_timestamp_str: <26}     GPS         TIME OF FIRST OBS   \n")
         self.observations_file.write(f"G                                                           SYS / PHASE SHIFT   \n")
         self.observations_file.write(f"  0                                                         GLONASS SLOT / FRQ #\n")
@@ -118,7 +118,7 @@ class RinexGenerator:
         transmission_time = format_rinex_float(gps_parameters.transmission_time_of_message)
         fit_interval = format_rinex_float(gps_parameters.fit_interval_in_hours)
 
-        self.navigation_file.write(f"{satellite_system}{prn} {epoch} {sv_clock_bias} {sv_clock_drift} {sv_clock_drift_rate}\n")
+        self.navigation_file.write(f"{satellite_system}{prn: >2} {epoch} {sv_clock_bias} {sv_clock_drift} {sv_clock_drift_rate}\n")
         self.navigation_file.write(f"     {iode} {crs} {delta_n} {m0}\n")
         self.navigation_file.write(f"     {cuc} {e} {cus} {sqrt_a}\n")
         self.navigation_file.write(f"     {toe} {cic} {omega0} {cis}\n")
@@ -146,4 +146,6 @@ class RinexGenerator:
         for prn, pseudorange, doppler in zip(prns, pseudoranges, direct_doppler):
             pseudorange_str = f"{pseudorange:.3f}"
             doppler_str = f"{doppler:.3f}"
-            self.observations_file.write(f"G{prn:>2} {pseudorange_str:>13}   {doppler_str:>13}   \n")
+            signal_strength_str = f"{54.0: 2.3f}" # in dbHz see 5.7 of RINEX v3.03 # TODO use actual noise data here
+            # TODO add strength for each field in ratio with actual data
+            self.observations_file.write(f"G{prn:>2} {pseudorange_str:>13}   {doppler_str:>13}   {signal_strength_str:>13}\n")

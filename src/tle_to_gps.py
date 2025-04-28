@@ -91,5 +91,5 @@ def convert_tle_to_gps_parameters(satellite: EarthSatellite, satellite_clock_bia
         tgd_total_group_delay=np.float64(0),
         iodc_issue_of_data_clock=np.float64(0),
         transmission_time_of_message=gps_week_time,
-        fit_interval_in_hours=np.float64(0), # HACK set to 1 to prevent old TLEs from being thrown out
+        fit_interval_in_hours=np.float64(4),
     )
