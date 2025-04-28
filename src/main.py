@@ -21,7 +21,8 @@ from gnss_sensor import GnssSensor
 from solver import Solver
 from constants import GPS_L1_FREQUENCY
 from rinex_generator import RinexGenerator
-from src.is_overhead import is_satellite_overhead
+from is_overhead import is_satellite_overhead
+from skyplot import get_skyplot
 
 PIXELS_TO_METERS = 1/10
 METERS_TO_PIXELS = 1/PIXELS_TO_METERS
@@ -82,39 +83,6 @@ NOISE_FIX_LOSS_LEVEL = np.float64(40) # dB
 NOISE_EFFECT_RATE = np.float64(5) / (NOISE_FIX_LOSS_LEVEL - NOISE_CORRECTION_LEVEL) # m / dB
 
 GNSS_SIGNAL_FREQUENCY = GPS_L1_FREQUENCY
-
-@dataclass
-class Skyplot:
-    prns: List[int]
-    satellite_positions: List[Tuple[int, int]]
-    sixty_deg_line: int
-    thirty_deg_line: int
-    zero_deg_line: int
-
-
-def get_skyplot(receiver_position_ecef, satellite_positions_ecef, satellite_prns, width, height,
-                elevation_cutoff_rad: np.float64) -> Skyplot:
-    def convert_altitude(elevation):
-        return -(elevation - np.deg2rad(90)) / np.deg2rad(90) * (width//2) * 0.90
-
-    skyplot_prns = []
-    skyplot_positions = []
-
-    for prn, satellite_position_ecef in zip(satellite_prns, satellite_positions_ecef):
-        satellite_position_aer = ecef2aer(receiver_position_ecef, satellite_position_ecef)
-        azimuth, elevation = satellite_position_aer[0], satellite_position_aer[1]
-        if elevation < elevation_cutoff_rad:
-            continue
-
-        skyplot_length = convert_altitude(elevation)
-        skyplot_x = np.cos(azimuth - np.deg2rad(90)) * skyplot_length + width//2
-        skyplot_y = np.sin(azimuth - np.deg2rad(90)) * skyplot_length + height//2
-
-        skyplot_prns.append(prn)
-        skyplot_positions.append((np.int64(skyplot_x).item(), np.int64(skyplot_y).item()))
-
-    return Skyplot(skyplot_prns, skyplot_positions, convert_altitude(np.deg2rad(60)), convert_altitude(np.deg2rad(30)),
-                   convert_altitude(np.deg2rad(0)))
 
 
 def create_rinex_generator(start_position_ecef, satellite_orbits: List[EarthSatellite],
