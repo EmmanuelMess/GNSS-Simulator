@@ -2,12 +2,11 @@ import os
 from typing import List
 
 import numpy as np
-from astropy.time import TimeGPS
-from skyfield.sgp4lib import EarthSatellite
-from skyfield.timelib import Time
+from astropy.time import TimeGPS, Time
 
 from numpy_types import array3d
-from src import tle_to_gps
+from gps_orbital_parameters import GpsOrbitalParameters
+from gps_satellite import GpsSatellite
 
 
 class RinexGenerator:
@@ -22,7 +21,7 @@ class RinexGenerator:
         # TODO make it auto close the files
 
         # TODO check if the week number starts at 0
-        file_name = f"{utc_start.tt_strftime('%Y%m%d%H%M%S')}.{utc_start.tt_strftime('%W')}"
+        file_name = f"{utc_start.strftime('%Y%m%d%H%M%S')}.{utc_start.strftime('%W')}"
 
         self.navigation_file = open(os.path.join(folder, f"{file_name}P"), "w") #TODO fix name
         self.observations_file = open(os.path.join(folder, f"{file_name}O"), "w") #TODO fix name
@@ -47,7 +46,7 @@ class RinexGenerator:
         position_y = np.round(approximate_start_position[1], 4)
         position_z = np.round(approximate_start_position[2], 4)
 
-        time_utc_str = f"{time_utc.utc_strftime('%Y%m%d')} {time_utc.utc_strftime('%H%M%S')} UTC"
+        time_utc_str = f"{time_utc.strftime('%Y%m%d')} {time_utc.strftime('%H%M%S')} UTC"
 
         reformatted_seconds = f"{np.float64(time_of_first_observation.strftime('%S.%f')): 2.7f}"
         start_timestamp_str = f"{time_of_first_observation.strftime(' %Y    %m    %d    %H    %M')}   {reformatted_seconds:>10}"
@@ -68,10 +67,11 @@ class RinexGenerator:
         self.observations_file.write(f"                                                            GLONASS COD/PHS/BIS \n") # TODO check this is valid
         self.observations_file.write(f"                                                            END OF HEADER       \n")
 
-    def _add_satellite(self, satellite: EarthSatellite, satellite_clock_bias: np.float64):
+    def _add_satellite(self, gps_parameters: GpsOrbitalParameters):
         def format_rinex_float(value: np.float64) -> str:
             """
             This formats the value as 4X, 4D19.12 format. If the value is not finite, the result is malformed.
+            TODO delete this function
             """
             if not np.isfinite(value):
                 return f"{value}"
@@ -83,11 +83,9 @@ class RinexGenerator:
             mantissa_str = f'{mantissa:.12f}'.replace("0.", ".")
             return f'{sign}{mantissa_str}E{exponent:+03d}'
 
-        gps_parameters = tle_to_gps.convert_tle_to_gps_parameters(satellite, satellite_clock_bias)
-
         satellite_system = gps_parameters.satellite_system
-        prn = f"{gps_parameters.prn_number: <2}"
-        epoch = gps_parameters.epoch_gps_time.strftime("%Y %m %d %H %M %S")
+        prn = gps_parameters.prn_number
+        epoch = gps_parameters.epoch.strftime("%Y %m %d %H %M %S")
         sv_clock_bias = format_rinex_float(gps_parameters.sv_clock_bias)
         sv_clock_drift = format_rinex_float(gps_parameters.sv_clock_drift)
         sv_clock_drift_rate = format_rinex_float(gps_parameters.sv_clock_drift_rate)
@@ -118,7 +116,7 @@ class RinexGenerator:
         transmission_time = format_rinex_float(gps_parameters.transmission_time_of_message)
         fit_interval = format_rinex_float(gps_parameters.fit_interval_in_hours)
 
-        self.navigation_file.write(f"{satellite_system}{prn: >2} {epoch} {sv_clock_bias} {sv_clock_drift} {sv_clock_drift_rate}\n")
+        self.navigation_file.write(f"{satellite_system}{prn:>2} {epoch} {sv_clock_bias} {sv_clock_drift} {sv_clock_drift_rate}\n")
         self.navigation_file.write(f"     {iode} {crs} {delta_n} {m0}\n")
         self.navigation_file.write(f"     {cuc} {e} {cus} {sqrt_a}\n")
         self.navigation_file.write(f"     {toe} {cic} {omega0} {cis}\n")
@@ -127,12 +125,12 @@ class RinexGenerator:
         self.navigation_file.write(f"     {sv_accuracy} {sv_health} {tgd} {iodc}\n")
         self.navigation_file.write(f"     {transmission_time} {fit_interval}\n")
 
-    def add_satellites(self, satellites: List[EarthSatellite], satellite_clock_biases: List[np.float64]):
+    def add_satellites(self, satellites: List[GpsSatellite], satellite_clock_biases: List[np.float64]):
         if len(satellites) != len(satellite_clock_biases):
             return
 
         for satellite, satellite_clock_bias in zip(satellites, satellite_clock_biases):
-            self._add_satellite(satellite, satellite_clock_bias)
+            self._add_satellite(satellite.parameters())
 
     def add_position(self, time_gps: TimeGPS, prns: List[int], pseudoranges: List[np.float64],
                      direct_doppler: List[np.float64]):

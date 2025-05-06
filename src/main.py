@@ -1,20 +1,16 @@
 import datetime
 import os
-from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
 import datetime as dt
 
 import astropy.time
 from skyfield.api import load
-from skyfield.iokit import parse_tle_file
 from pyray import *
 from raylib import *
-from skyfield.sgp4lib import EarthSatellite
 from skyfield.timelib import Time
 from skyfield.toposlib import wgs84
 
-import prn_from_name
 from conversions import *
 from antenna_simulator import AntennaSimulator
 from gnss_sensor import GnssSensor
@@ -23,7 +19,10 @@ from constants import GPS_L1_FREQUENCY
 from rinex_generator import RinexGenerator
 from is_overhead import is_satellite_overhead
 from skyplot import get_skyplot
+import gps_orbital_parameters
+from gps_satellite import GpsSatellite
 
+SATELLITE_FILENAMES = ["01.orbit", "02.orbit", "03.orbit", "04.orbit", "05.orbit", "06.orbit"]
 PIXELS_TO_METERS = 1/10
 METERS_TO_PIXELS = 1/PIXELS_TO_METERS
 MOVEMENT_SPEED_METERS_PER_SECOND = 5.0
@@ -85,8 +84,9 @@ NOISE_EFFECT_RATE = np.float64(5) / (NOISE_FIX_LOSS_LEVEL - NOISE_CORRECTION_LEV
 GNSS_SIGNAL_FREQUENCY = GPS_L1_FREQUENCY
 
 
-def create_rinex_generator(start_position_ecef, satellite_orbits: List[EarthSatellite],
-                           satellite_clock_biases: List[np.float64], utc_start: Time, gps_start: astropy.time.TimeGPS)\
+def create_rinex_generator(start_position_ecef, satellite_orbits: List[GpsSatellite],
+                           satellite_clock_biases: List[np.float64], utc_start: Time,
+                           gps_start: astropy.time.TimeGPS)\
         -> RinexGenerator:
     folder_name = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     folder_path = os.path.join("output", folder_name)
@@ -108,25 +108,32 @@ def main():
     start_receiver_position = wgs84.latlon(0.0, 0.0).at(start_time).xyz.m # TODO move to the other constants as lat long height
     gps_start_time = start_time.to_astropy()
     gps_start_time.format = "gps"
+    satellite_orbits: List[GpsSatellite] = []
 
     # Get satellites, filter by availability
-    with load.open('resources/gps_falseepoch.tle') as file:
-        satellite_orbits = list(parse_tle_file(file, timescale))
+    for filename in SATELLITE_FILENAMES:
+        with open(os.path.join("resources", filename), 'r') as file:
+            lines = file.read()
+            parameters = gps_orbital_parameters.from_rinex(lines)
+            satellite_orbits.append(GpsSatellite(parameters))
 
-    visible_satellite_orbits = [satellite for satellite in satellite_orbits if is_satellite_overhead(start_receiver_position, satellite.at(start_time).xyz.m, CUTOFF_ELEVATION)]
+    visible_satellite_orbits = [
+        satellite for satellite in satellite_orbits if is_satellite_overhead(start_receiver_position, satellite.position_velocity(gps_start_time)[0], CUTOFF_ELEVATION)
+    ]
     cut_satellite_orbits = visible_satellite_orbits[:SATELLITE_NUMBER]
-    satellite_prns = [prn_from_name.get_prn(satellite.name) for satellite in cut_satellite_orbits]
+    satellite_prns: List[int] = [satellite.parameters().prn_number for satellite in cut_satellite_orbits]
 
     print(f"Loaded {len(satellite_orbits)} satellites, {len(visible_satellite_orbits)} visible, cut to {SATELLITE_NUMBER}")
     print(satellite_prns)
     print(f"Sim start time: {start_time.utc_datetime()}")
-    print(f"Satellite epochs: {[satellite.epoch.utc_strftime() for satellite in cut_satellite_orbits]}")
-    print(f"Satellite positions: {[list(np.round(np.rad2deg(ecef2llh(satellite.at(start_time).xyz.m)))) for satellite in cut_satellite_orbits]}")
-    print(f"Satellite velocities: {[satellite.at(start_time).velocity.m_per_s for satellite in cut_satellite_orbits]}")
+    print(f"Satellite epochs: {[satellite.parameters().epoch.strftime('%Y-%m-%d %H:%M:%S') for satellite in cut_satellite_orbits]}")
+    print(f"Satellite positions: {[np.round(np.rad2deg(ecef2llh(satellite.position_velocity(gps_start_time)[0]))) for satellite in cut_satellite_orbits]}")
+    print(f"Satellite velocities: {[satellite.position_velocity(gps_start_time)[1] for satellite in cut_satellite_orbits]}")
     print(f"Satelite clock biases: {SATELLITE_CLOCK_BIAS}")
+    print(f"Seconds of week to first epoch {time_gps2seconds_of_week(gps_start_time.value)}")
 
     rinex_generator = create_rinex_generator(start_receiver_position, cut_satellite_orbits, list(SATELLITE_CLOCK_BIAS),
-                                             start_time, gps_start_time)
+                                             start_time.to_astropy(), gps_start_time)
     # Position simulation components
     simulator = AntennaSimulator(rng, SATELLITE_NUMBER, SATELLITE_CLOCK_BIAS, GNSS_SIGNAL_FREQUENCY, SATELLITE_ALPHAS,
                                  SATELLITE_BETAS, JAMMER_NOISE, NOISE_CORRECTION_LEVEL, NOISE_FIX_LOSS_LEVEL,
@@ -148,10 +155,13 @@ def main():
         delta = get_frame_time()
 
         time_utc += dt.timedelta(seconds=delta)
+        time_gps = time_utc.to_astropy()
+        time_gps.format = "gps"
         time_since_gnss += delta
 
-        satellite_positions = np.array([satellite.at(time_utc).xyz.m for satellite in cut_satellite_orbits], dtype=np.float64)
-        satellite_velocities = np.array([satellite.at(time_utc).velocity.m_per_s for satellite in cut_satellite_orbits], dtype=np.float64)
+        satellite_positions_velocities = np.array([satellite.position_velocity(time_gps) for satellite in cut_satellite_orbits], dtype=np.float64)
+        satellite_positions = satellite_positions_velocities[:, 0, :]
+        satellite_velocities = satellite_positions_velocities[:, 1, :]
 
         if is_key_down(KEY_LEFT) or is_key_down(KEY_A):
             player_delta_x = -1
@@ -181,7 +191,7 @@ def main():
 
             gnss_position, gnss_velocity, _, _ = sensor.update(satellite_positions, satellite_velocities,
                                                                player_positions, player_velocities, receiver_clock_bias,
-                                                               RECEIVER_CLOCK_WALK, time_utc.to_astropy(), time_utc)
+                                                               RECEIVER_CLOCK_WALK, time_gps, time_utc)
             gnss_positions.append(gnss_position)
             gnss_velocities.append(gnss_velocity)
             time_since_gnss = 0

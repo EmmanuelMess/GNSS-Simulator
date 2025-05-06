@@ -1,7 +1,7 @@
 import numpy as np
 from pyray import Vector2
 
-from numpy_types import array3d
+from src.numpy_types import array3d
 
 def toVector2(array: array3d) -> Vector2:
     return Vector2(array[0].item(), array[1].item())
@@ -95,3 +95,16 @@ def time_gps2week_number(time_gps: np.float64) -> int:
     seconds_in_week = 7 * 24 * 60 * 60
 
     return np.int64(np.floor(time_gps / seconds_in_week)).item()
+
+def gps_seconds_wrap(seconds_of_week: int) -> int:
+    """
+    Wrap the seconds of week into the last of next week
+    """
+    seconds_per_week = 7 * 24 * 60 * 60
+
+    if seconds_of_week > seconds_per_week / 2:
+        return seconds_of_week - seconds_per_week
+    elif seconds_of_week < -seconds_per_week / 2:
+        return seconds_of_week + seconds_per_week
+    else:
+        return seconds_of_week
