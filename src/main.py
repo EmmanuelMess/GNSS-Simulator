@@ -22,7 +22,7 @@ from src.skyplot import get_skyplot
 from src import gps_orbital_parameters
 from src.gps_satellite import GpsSatellite
 
-SATELLITE_FILENAMES = ["01.orbit", "02.orbit", "03.orbit", "04.orbit", "05.orbit", "06.orbit"]
+SATELLITE_FILENAMES = ["dumg/03.orbit", "dumg/04.orbit", "dumg/06.orbit", "dumg/09.orbit", "dumg/11.orbit", "dumg/26.orbit", "dumg/28.orbit", "dumg/31.orbit"]
 PIXELS_TO_METERS = 1/10
 METERS_TO_PIXELS = 1/PIXELS_TO_METERS
 MOVEMENT_SPEED_METERS_PER_SECOND = 5.0
@@ -104,8 +104,8 @@ def main():
     width, height = 800, 450
     rng = np.random.default_rng()
     timescale = load.timescale()
-    start_time = timescale.utc(2025, 5, 1, 9, 10, 0) # TODO move to the other constants as a string
-    start_receiver_position = wgs84.latlon(0.0, 0.0).at(start_time).xyz.m # TODO move to the other constants as lat long height
+    start_time = timescale.utc(2025, 1, 1, 9, 0, 0) # TODO move to the other constants as a string
+    start_receiver_position = wgs84.latlon(-66.665, -140.002, -3.38).at(start_time).xyz.m # TODO move to the other constants as lat long height
     gps_start_time = start_time.to_astropy()
     gps_start_time.format = "gps"
     satellite_orbits: List[GpsSatellite] = []

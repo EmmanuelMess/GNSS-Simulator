@@ -45,12 +45,19 @@ PSEUDORANGES = np.array([
 ], dtype=np.float64)
 
 REAL_POSITION  = np.array([2765120.6553, -4449249.8563, -3626405.2770], dtype=np.float64)
-REAL_RECEIVER_BIAS = np.float64(-1000.0 * 1e-9) # Assumed, I don't know
+REAL_RECEIVER_BIAS = np.float64(0.0 * 1e-9) # Assumed, I don't know
 
 class GroundTruthTest(unittest.TestCase):
     def test_laplata_position(self):
+        # AGGO00ARG 20240101 000000 UTC data courtesy of NASA's CDDIS
+        trotot = np.float64(2465.8)  # mm
         for i in range(PSEUDORANGES.shape[0]):
-            pseudorange_estimation = np.linalg.norm(SATELLITE_POSITIONS[i] - REAL_POSITION) + (REAL_RECEIVER_BIAS - SATELLITE_CLOCK_BIAS[i]) * scipy.constants.c
+            pseudorange_estimation = (
+                    np.linalg.norm(SATELLITE_POSITIONS[i] - REAL_POSITION)
+                    + trotot * 1e-3
+                    + scipy.constants.c * 0.0 # TODO add ionospheric effect
+                    + (REAL_RECEIVER_BIAS - SATELLITE_CLOCK_BIAS[i]) * scipy.constants.c
+            )
             self.assertAlmostEqual(PSEUDORANGES[i], pseudorange_estimation, places=-3, msg=f"at index {i}")
 
 

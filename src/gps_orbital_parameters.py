@@ -42,8 +42,10 @@ class GpsOrbitalParameters:
     transmission_time_of_message: np.float64
     fit_interval_in_hours: np.float64
 
-
-RINEX_REGEX = re.compile("^(?P<system>[A-Z])(?P<sv>\d{2}) (?P<year>\d{4}) (?P<month>\d{2}) (?P<day>\d{2}) (?P<hour>\d{2}) (?P<minute>\d{2}) (?P<second>\d{2})( ?(?P<clock_bias>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<clock_drift>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<clock_drift_rate>-?\+?\d.\d{12}E-?\+?\d{2}))([\n ]*)( ?(?P<iode>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<crs>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<delta_n>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<m0>-?\+?\d.\d{12}E-?\+?\d{2}))([\n ]*)( ?(?P<cuc>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<e>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<cus>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<sqrt_a>-?\+?\d.\d{12}E-?\+?\d{2}))([\n ]*)( ?(?P<toe>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<cic>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<omega0>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<cis>-?\+?\d.\d{12}E-?\+?\d{2}))([\n ]*)( ?(?P<i0>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<crc>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<omega>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<omega_dot>-?\+?\d.\d{12}E-?\+?\d{2}))([\n ]*)( ?(?P<idot>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<codes_l2>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<gps_week>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<l2_data>-?\+?\d.\d{12}E-?\+?\d{2}))([\n ]*)( ?(?P<accuracy>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<health>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<tgd>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<iodc>-?\+?\d.\d{12}E-?\+?\d{2}))([\n ]*)( ?(?P<transmission_time>-?\+?\d.\d{12}E-?\+?\d{2}))( ?(?P<fit_interval>-?\+?\d.\d{12}E-?\+?\d{2}))", re.MULTILINE)
+RINEX_START = "(?P<system>[A-Z])(?P<sv>\d{2}) (?P<year>\d{4}) (?P<month>\d{2}) (?P<day>\d{2}) (?P<hour>\d{2}) (?P<minute>\d{2}) (?P<second>\d{2})"
+RINEX_DOUBLE_REGEX = "[\-\+ ]\d?.\d{12}[EeDd][\-\+]\d{2}"
+RINEX_LINE_JUMP = "\n *"
+RINEX_REGEX = re.compile(f"^{RINEX_START}(?P<clock_bias>{RINEX_DOUBLE_REGEX})(?P<clock_drift>{RINEX_DOUBLE_REGEX})(?P<clock_drift_rate>{RINEX_DOUBLE_REGEX}){RINEX_LINE_JUMP}(?P<iode>{RINEX_DOUBLE_REGEX})(?P<crs>{RINEX_DOUBLE_REGEX})(?P<delta_n>{RINEX_DOUBLE_REGEX})(?P<m0>{RINEX_DOUBLE_REGEX}){RINEX_LINE_JUMP}(?P<cuc>{RINEX_DOUBLE_REGEX})(?P<e>{RINEX_DOUBLE_REGEX})(?P<cus>{RINEX_DOUBLE_REGEX})(?P<sqrt_a>{RINEX_DOUBLE_REGEX}){RINEX_LINE_JUMP}(?P<toe>{RINEX_DOUBLE_REGEX})(?P<cic>{RINEX_DOUBLE_REGEX})(?P<omega0>{RINEX_DOUBLE_REGEX})(?P<cis>{RINEX_DOUBLE_REGEX}){RINEX_LINE_JUMP}(?P<i0>{RINEX_DOUBLE_REGEX})(?P<crc>{RINEX_DOUBLE_REGEX})(?P<omega>{RINEX_DOUBLE_REGEX})(?P<omega_dot>{RINEX_DOUBLE_REGEX}){RINEX_LINE_JUMP}(?P<idot>{RINEX_DOUBLE_REGEX})(?P<codes_l2>{RINEX_DOUBLE_REGEX})(?P<gps_week>{RINEX_DOUBLE_REGEX})(?P<l2_data>{RINEX_DOUBLE_REGEX}){RINEX_LINE_JUMP}(?P<accuracy>{RINEX_DOUBLE_REGEX})(?P<health>{RINEX_DOUBLE_REGEX})(?P<tgd>{RINEX_DOUBLE_REGEX})(?P<iodc>{RINEX_DOUBLE_REGEX}){RINEX_LINE_JUMP}(?P<transmission_time>{RINEX_DOUBLE_REGEX})(?P<fit_interval>{RINEX_DOUBLE_REGEX})", re.MULTILINE)
 
 def from_rinex(string: str) -> GpsOrbitalParameters:
     """
@@ -52,10 +54,16 @@ def from_rinex(string: str) -> GpsOrbitalParameters:
     the parameters were read correctly.
     """
 
+    def convert_float(text: str) -> np.float64:
+        text = text.replace("D", "E")
+        text = text.replace("d", "e")
+
+        return np.float64(text)
+
     matches = re.match(RINEX_REGEX, string)
 
-    week_of_year = np.float64(matches.group("gps_week"))
-    toe = np.float64(matches.group("toe"))
+    week_of_year = convert_float(matches.group("gps_week"))
+    toe = convert_float(matches.group("toe"))
 
     epoch = Time(week_of_year * u.week + toe * u.s, format='gps')
 
@@ -63,35 +71,35 @@ def from_rinex(string: str) -> GpsOrbitalParameters:
         satellite_system = matches.group("system"),
         prn_number = np.int64(matches.group("sv")).item(),
         epoch=epoch,
-        sv_clock_bias = np.float64(matches.group("clock_bias")),
-        sv_clock_drift = np.float64(matches.group("clock_drift")),
-        sv_clock_drift_rate = np.float64(matches.group("clock_drift_rate")),
-        issue_of_data_ephemeris = np.float64(matches.group("iode")),
-        amplitude_sine_harmonic_correction_term_to_orbit_radius = np.float64(matches.group("crs")),
-        mean_motion_difference_from_computed_value = np.float64(matches.group("delta_n")),
-        mean_anomaly_at_reference_time = np.float64(matches.group("m0")),
-        amplitude_of_cosine_harmonic_correction_term_to_argument_of_latitude = np.float64(matches.group("cuc")),
-        eccentricity = np.float64(matches.group("e")),
-        amplitude_of_sine_harmonic_correction_term_to_argument_of_latitude = np.float64(matches.group("cus")),
-        square_root_of_semi_major_axis = np.float64(matches.group("sqrt_a")),
+        sv_clock_bias = convert_float(matches.group("clock_bias")),
+        sv_clock_drift = convert_float(matches.group("clock_drift")),
+        sv_clock_drift_rate = convert_float(matches.group("clock_drift_rate")),
+        issue_of_data_ephemeris = convert_float(matches.group("iode")),
+        amplitude_sine_harmonic_correction_term_to_orbit_radius = convert_float(matches.group("crs")),
+        mean_motion_difference_from_computed_value = convert_float(matches.group("delta_n")),
+        mean_anomaly_at_reference_time = convert_float(matches.group("m0")),
+        amplitude_of_cosine_harmonic_correction_term_to_argument_of_latitude = convert_float(matches.group("cuc")),
+        eccentricity = convert_float(matches.group("e")),
+        amplitude_of_sine_harmonic_correction_term_to_argument_of_latitude = convert_float(matches.group("cus")),
+        square_root_of_semi_major_axis = convert_float(matches.group("sqrt_a")),
         time_of_ephemeris = toe,
-        amplitude_of_cosine_harmonic_correction_term_to_angle_of_inclination = np.float64(matches.group("cic")),
-        longitude_of_ascending_node_of_orbit_plane_at_weekly_epoch = np.float64(matches.group("omega0")),
-        amplitude_of_sine_harmonic_correction_term_to_angle_of_inclination = np.float64(matches.group("cis")),
-        inclination_angle_at_reference_time = np.float64(matches.group("i0")),
-        amplitude_of_cosine_harmonic_correction_term_to_orbit_radius = np.float64(matches.group("crc")),
-        argument_of_perigee = np.float64(matches.group("omega")),
-        rate_of_right_ascension = np.float64(matches.group("omega_dot")),
-        rate_of_inclination_angle = np.float64(matches.group("idot")),
-        codes_on_l2_channel = np.float64(matches.group("codes_l2")),
+        amplitude_of_cosine_harmonic_correction_term_to_angle_of_inclination = convert_float(matches.group("cic")),
+        longitude_of_ascending_node_of_orbit_plane_at_weekly_epoch = convert_float(matches.group("omega0")),
+        amplitude_of_sine_harmonic_correction_term_to_angle_of_inclination = convert_float(matches.group("cis")),
+        inclination_angle_at_reference_time = convert_float(matches.group("i0")),
+        amplitude_of_cosine_harmonic_correction_term_to_orbit_radius = convert_float(matches.group("crc")),
+        argument_of_perigee = convert_float(matches.group("omega")),
+        rate_of_right_ascension = convert_float(matches.group("omega_dot")),
+        rate_of_inclination_angle = convert_float(matches.group("idot")),
+        codes_on_l2_channel = convert_float(matches.group("codes_l2")),
         gps_week_number = week_of_year,
-        l2_p_data_flag = np.float64(matches.group("l2_data")),
-        sv_accuracy = np.float64(matches.group("accuracy")),
-        sv_health = np.float64(matches.group("health")),
-        tgd_total_group_delay = np.float64(matches.group("tgd")),
-        iodc_issue_of_data_clock = np.float64(matches.group("iodc")),
-        transmission_time_of_message = np.float64(matches.group("transmission_time")),
-        fit_interval_in_hours   = np.float64(matches.group("fit_interval")),
+        l2_p_data_flag = convert_float(matches.group("l2_data")),
+        sv_accuracy = convert_float(matches.group("accuracy")),
+        sv_health = convert_float(matches.group("health")),
+        tgd_total_group_delay = convert_float(matches.group("tgd")),
+        iodc_issue_of_data_clock = convert_float(matches.group("iodc")),
+        transmission_time_of_message = convert_float(matches.group("transmission_time")),
+        fit_interval_in_hours   = convert_float(matches.group("fit_interval")), # TODO this is incorrect, should be 1 for 4hs 2 for 6hs
     )
 
     return parameters
