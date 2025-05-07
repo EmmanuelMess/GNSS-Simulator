@@ -4,9 +4,9 @@ import numpy as np
 from astropy.time import TimeGPS
 from skyfield.timelib import Time
 
-from antenna_simulator import AntennaSimulator
-from solver import Solver
-from conversions import ecef2aer, array3d, time_gps2seconds_of_week
+from src.antenna_simulator import AntennaSimulator
+from src.solver import Solver
+from src.conversions import array3d, time_gps2seconds_of_week
 from src.is_overhead import is_satellite_overhead
 from src.rinex_generator import RinexGenerator
 

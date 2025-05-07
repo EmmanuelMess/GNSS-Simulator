@@ -1,8 +1,8 @@
 import numpy as np
 import scipy
 
-from conversions import ecef2llh, rad2semicircles, ecef2aer, semicircles2rad, seconds2day_of_year
-from constants import GPS_L1_FREQUENCY
+from src.conversions import ecef2llh, rad2semicircles, ecef2aer, semicircles2rad, seconds2day_of_year
+from src.constants import GPS_L1_FREQUENCY
 
 
 class AntennaSimulator:

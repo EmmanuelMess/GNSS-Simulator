@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import scipy
 
-import main
+from src.solver import Solver
 
 SATELLITE_POSITIONS = np.array([
     [ 23313.808953, -10932.861917,   6118.858765],  # G03
@@ -56,8 +56,8 @@ class GroundTruthTest(unittest.TestCase):
 
 class TaylorAproximationTest(unittest.TestCase):
     def test_laplata_position(self):
-        solver = main.Solver(SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS,None, None)
-        approx_position, clock_bias, gnss_position_error = solver.solve_position(PSEUDORANGES, 1e-5)
+        solver = Solver(SATELLITE_POSITIONS.shape[0], SATELLITE_CLOCK_BIAS,None)
+        approx_position, clock_bias, gnss_position_error = solver.solve_position(SATELLITE_POSITIONS, PSEUDORANGES, 1e-5)
 
         distance = np.linalg.norm(approx_position - REAL_POSITION)
 

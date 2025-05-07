@@ -5,8 +5,8 @@ import numpy as np
 from astropy.time import TimeGPS, Time
 
 from numpy_types import array3d
-from gps_orbital_parameters import GpsOrbitalParameters
-from gps_satellite import GpsSatellite
+from src.gps_orbital_parameters import GpsOrbitalParameters
+from src.gps_satellite import GpsSatellite
 
 
 class RinexGenerator:
@@ -60,7 +60,7 @@ class RinexGenerator:
         self.observations_file.write(f"                                                            ANT # / TYPE        \n") # TODO add info
         self.observations_file.write(f" {position_x: >13} {position_y: >13} {position_z: >13}                  APPROX POSITION XYZ \n")
         self.observations_file.write(f"        0.0000        0.0000        0.0000                  ANTENNA: DELTA H/E/N\n") # TODO know what these are
-        self.observations_file.write(f"G    3 C1C  D1C  S1C                                        SYS / # / OBS TYPES \n") # TODO check that it is C code-based
+        self.observations_file.write(f"G    3 C1C  D1C  S1C                                        SYS / # / OBS TYPES \n")
         self.observations_file.write(f" {start_timestamp_str: <26}     GPS         TIME OF FIRST OBS   \n")
         self.observations_file.write(f"G                                                           SYS / PHASE SHIFT   \n")
         self.observations_file.write(f"  0                                                         GLONASS SLOT / FRQ #\n")

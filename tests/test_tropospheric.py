@@ -1,7 +1,7 @@
 import unittest
 
-import main
-from main import ecef2llh
+from src.antenna_simulator import AntennaSimulator
+from src.conversions import ecef2llh
 from tests.constants import *
 
 class TrosposphericModelTest(unittest.TestCase):
@@ -16,9 +16,11 @@ class TrosposphericModelTest(unittest.TestCase):
         self.assertAlmostEqual(np.rad2deg(position_llh[1]), -58.139861, delta=1e-5)
         self.assertAlmostEqual(position_llh[2], 42.085, delta=1)
 
-        simulator = main.AntennaSimulator(None, np.array([]), None, None,
-                                          None, None, None, None,
-                                          None, None, None)
+        cutoff_angle = np.deg2rad(7)
+
+        simulator = AntennaSimulator(None, np.array([]), None, None,
+                                          None, None, np.float64(0.0), None,
+                                          None, None, None, cutoff_angle)
 
         # Atmospheric data from SMN, Argentina
         # Vapor pressure of water from CRC Handbook of Chemistry and Physics, 85th Edition
@@ -26,11 +28,10 @@ class TrosposphericModelTest(unittest.TestCase):
         delay_saastamoinen = dry_delay + wet_delay
 
         trotot = np.float64(2465.8) # mm
-        cutoff_angle = np.deg2rad(7)
 
         self.assertAlmostEqual(delay_saastamoinen * 1e3, trotot, delta=0.1 * 1e3)
 
-        delay_unb4 = simulator._per_satelite_tropospheric_delay(position_llh, np.pi/2, 0, cutoff_angle)
+        delay_unb4 = simulator._per_satelite_tropospheric_delay(position_llh, np.pi/2, 0)
 
         self.assertAlmostEqual(delay_unb4 * 1e3, trotot, delta=0.1 * 1e3)
 

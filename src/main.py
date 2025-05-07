@@ -11,16 +11,16 @@ from raylib import *
 from skyfield.timelib import Time
 from skyfield.toposlib import wgs84
 
-from conversions import *
-from antenna_simulator import AntennaSimulator
-from gnss_sensor import GnssSensor
-from solver import Solver
-from constants import GPS_L1_FREQUENCY
-from rinex_generator import RinexGenerator
-from is_overhead import is_satellite_overhead
-from skyplot import get_skyplot
-import gps_orbital_parameters
-from gps_satellite import GpsSatellite
+from src.conversions import *
+from src.antenna_simulator import AntennaSimulator
+from src.gnss_sensor import GnssSensor
+from src.solver import Solver
+from src.constants import GPS_L1_FREQUENCY
+from src.rinex_generator import RinexGenerator
+from src.is_overhead import is_satellite_overhead
+from src.skyplot import get_skyplot
+from src import gps_orbital_parameters
+from src.gps_satellite import GpsSatellite
 
 SATELLITE_FILENAMES = ["01.orbit", "02.orbit", "03.orbit", "04.orbit", "05.orbit", "06.orbit"]
 PIXELS_TO_METERS = 1/10
@@ -104,7 +104,7 @@ def main():
     width, height = 800, 450
     rng = np.random.default_rng()
     timescale = load.timescale()
-    start_time = timescale.utc(2025, 4, 19, 9, 0, 0) # TODO move to the other constants as a string
+    start_time = timescale.utc(2025, 5, 1, 9, 10, 0) # TODO move to the other constants as a string
     start_receiver_position = wgs84.latlon(0.0, 0.0).at(start_time).xyz.m # TODO move to the other constants as lat long height
     gps_start_time = start_time.to_astropy()
     gps_start_time.format = "gps"

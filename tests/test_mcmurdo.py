@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import scipy
 
-import main
+from src.solver import Solver
 
 SATELLITE_POSITIONS = np.array([
     [10011.699639, 16084.389751, -19050.244266],   # G04
@@ -59,10 +59,9 @@ class GroundTruthTest(unittest.TestCase):
 
 class TaylorAproximationTest(unittest.TestCase):
     def test_mcmurdo_position_few_satellites(self):
-        solver = main.Solver(SATELLITE_POSITIONS[FOUR_SATELLITES], SATELLITE_CLOCK_BIAS[FOUR_SATELLITES],
-                             None, None)
+        solver = Solver(4, SATELLITE_CLOCK_BIAS[FOUR_SATELLITES],None)
         approx_position, clock_bias, gnss_position_error =\
-            solver.solve_position(PSEUDORANGES[FOUR_SATELLITES], 1e-3)
+            solver.solve_position(SATELLITE_POSITIONS[FOUR_SATELLITES], PSEUDORANGES[FOUR_SATELLITES], 1e-3)
 
         distance = np.linalg.norm(approx_position - REAL_POSITION)
 
@@ -70,8 +69,9 @@ class TaylorAproximationTest(unittest.TestCase):
         self.assertAlmostEqual(clock_bias, REAL_RECEIVER_BIAS, delta=0.001)
 
     def test_mcmurdo_position(self):
-        solver = main.Solver(SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS,None, None)
-        approx_position, clock_bias, gnss_position_error = solver.solve_position(PSEUDORANGES, 1e-3)
+        solver = Solver(SATELLITE_POSITIONS.shape[0], SATELLITE_CLOCK_BIAS,None)
+        approx_position, clock_bias, gnss_position_error =\
+            solver.solve_position(SATELLITE_POSITIONS, PSEUDORANGES, 1e-3)
 
         distance = np.linalg.norm(approx_position - REAL_POSITION)
 
@@ -81,10 +81,9 @@ class TaylorAproximationTest(unittest.TestCase):
 
 class LSEAproximationTest(unittest.TestCase):
     def test_mcmurdo_position_few_satellites(self):
-        solver = main.Solver(SATELLITE_POSITIONS[FOUR_SATELLITES], SATELLITE_CLOCK_BIAS[FOUR_SATELLITES],
-                             None, None)
+        solver = Solver(4, SATELLITE_CLOCK_BIAS[FOUR_SATELLITES],None)
         approx_position, clock_bias, gnss_position_error =\
-            solver.solve_position_scipy(PSEUDORANGES[FOUR_SATELLITES], 1e-3)
+            solver.solve_position_scipy(SATELLITE_POSITIONS[FOUR_SATELLITES], PSEUDORANGES[FOUR_SATELLITES], 1e-3)
 
         distance = np.linalg.norm(approx_position - REAL_POSITION)
 
@@ -92,8 +91,9 @@ class LSEAproximationTest(unittest.TestCase):
         self.assertAlmostEqual(clock_bias, REAL_RECEIVER_BIAS, delta=0.001)
 
     def test_mcmurdo_position(self):
-        solver = main.Solver(SATELLITE_POSITIONS, SATELLITE_CLOCK_BIAS, None, None)
-        approx_position, clock_bias, gnss_position_error = solver.solve_position_scipy(PSEUDORANGES, 1e-3)
+        solver = Solver(SATELLITE_POSITIONS.shape[0], SATELLITE_CLOCK_BIAS, None)
+        approx_position, clock_bias, gnss_position_error =\
+            solver.solve_position_scipy(SATELLITE_POSITIONS, PSEUDORANGES, 1e-3)
 
         distance = np.linalg.norm(approx_position - REAL_POSITION)
 

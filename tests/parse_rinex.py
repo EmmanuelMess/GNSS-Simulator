@@ -1,7 +1,6 @@
 import unittest
 
 import numpy as np
-from astropy.time import TimeGPS
 
 from src import gps_orbital_parameters
 
