@@ -4,12 +4,9 @@ from pathlib import Path
 from typing import List
 import datetime as dt
 
-import astropy.time
-from skyfield.api import load
+from astropy.time import Time
 from pyray import *
 from raylib import *
-from skyfield.timelib import Time
-from skyfield.toposlib import wgs84
 
 from src.conversions import *
 from src.antenna_simulator import AntennaSimulator
@@ -86,7 +83,7 @@ GNSS_SIGNAL_FREQUENCY = GPS_L1_FREQUENCY
 
 def create_rinex_generator(start_position_ecef, satellite_orbits: List[GpsSatellite],
                            satellite_clock_biases: List[np.float64], utc_start: Time,
-                           gps_start: astropy.time.TimeGPS)\
+                           gps_start: Time)\
         -> RinexGenerator:
     folder_name = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     folder_path = os.path.join("output", folder_name)
@@ -103,10 +100,10 @@ def main():
     # Implementation specific constants
     width, height = 800, 450
     rng = np.random.default_rng()
-    timescale = load.timescale()
-    start_time = timescale.utc(2025, 1, 1, 9, 0, 0) # TODO move to the other constants as a string
-    start_receiver_position = wgs84.latlon(-66.665, -140.002, -3.38).at(start_time).xyz.m # TODO move to the other constants as lat long height
-    gps_start_time = start_time.to_astropy()
+    start_time_string = "2025-01-01T09:00:00.000"
+    start_time = Time(start_time_string, format="isot", scale="utc")
+    start_receiver_position = llh2ecef(np.array([np.deg2rad(-66.665169), np.deg2rad(140.002200), -3.38], dtype=np.float64)) # TODO move to the other constants as lat long height
+    gps_start_time = Time(start_time)
     gps_start_time.format = "gps"
     satellite_orbits: List[GpsSatellite] = []
 
@@ -125,7 +122,7 @@ def main():
 
     print(f"Loaded {len(satellite_orbits)} satellites, {len(visible_satellite_orbits)} visible, cut to {SATELLITE_NUMBER}")
     print(satellite_prns)
-    print(f"Sim start time: {start_time.utc_datetime()}")
+    print(f"Sim start time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Satellite epochs: {[satellite.parameters().epoch.strftime('%Y-%m-%d %H:%M:%S') for satellite in cut_satellite_orbits]}")
     print(f"Satellite positions: {[np.round(np.rad2deg(ecef2llh(satellite.position_velocity(gps_start_time)[0]))) for satellite in cut_satellite_orbits]}")
     print(f"Satellite velocities: {[satellite.position_velocity(gps_start_time)[1] for satellite in cut_satellite_orbits]}")
@@ -133,7 +130,7 @@ def main():
     print(f"Seconds of week to first epoch {time_gps2seconds_of_week(gps_start_time.value)}")
 
     rinex_generator = create_rinex_generator(start_receiver_position, cut_satellite_orbits, list(SATELLITE_CLOCK_BIAS),
-                                             start_time.to_astropy(), gps_start_time)
+                                             start_time, gps_start_time)
     # Position simulation components
     simulator = AntennaSimulator(rng, SATELLITE_NUMBER, SATELLITE_CLOCK_BIAS, GNSS_SIGNAL_FREQUENCY, SATELLITE_ALPHAS,
                                  SATELLITE_BETAS, JAMMER_NOISE, NOISE_CORRECTION_LEVEL, NOISE_FIX_LOSS_LEVEL,
@@ -155,7 +152,7 @@ def main():
         delta = get_frame_time()
 
         time_utc += dt.timedelta(seconds=delta)
-        time_gps = time_utc.to_astropy()
+        time_gps = Time(time_utc)
         time_gps.format = "gps"
         time_since_gnss += delta
 
@@ -204,7 +201,7 @@ def main():
         class _draw:
             begin_drawing()
             clear_background(WHITE)
-            draw_text(f"{time_utc.utc_datetime()}", 10, 10, 14, BLACK)
+            draw_text(f"{time_utc.strftime('%Y-%m-%d %H:%M:%S')}", 10, 10, 14, BLACK)
 
             draw_circle_v(toVector2(player_position_px), 5, RED)
 

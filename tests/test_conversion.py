@@ -5,9 +5,10 @@ import re
 import numpy as np
 from skyfield.api import load
 from skyfield.iokit import parse_tle_file
+from skyfield.timelib import Time, Timescale
 from skyfield.toposlib import wgs84
 
-from src.conversions import ecef2llh, seconds2day_of_year, rad2semicircles, ecef2aer
+from src.conversions import ecef2llh, seconds2day_of_year, rad2semicircles, ecef2aer, llh2ecef
 from tests.constants import *
 
 
@@ -32,8 +33,58 @@ class SemicirclesTest(unittest.TestCase):
         self.assertAlmostEqual(rad2semicircles(np.deg2rad(np.float64(-124.795))), -0.6399, delta=0.1)
         self.assertAlmostEqual(rad2semicircles(np.deg2rad(np.float64(45.16))), 0.2529, delta=0.1)
 
+class Llh2EcefTest(unittest.TestCase):
+    def test_trivial_0(self):
+        ecef = llh2ecef(np.array([0, 0, 0], dtype=np.float64))
 
-class LlhTest(unittest.TestCase):
+        self.assertAlmostEqual(ecef[0], WSG84_SEMI_MAJOR_AXIS, delta=DISTANCE_PRECISION)
+        self.assertAlmostEqual(ecef[1], 0, delta=DISTANCE_PRECISION)
+        self.assertAlmostEqual(ecef[2], 0, delta=DISTANCE_PRECISION)
+
+    def test_mcmurdo(self):
+        # From http://grapenthin.org/teaching/geop555/LAB03_position_estimation.html
+        # WARNING: I think the presition of the measurement is lower than it should be
+
+        llh = np.array([np.deg2rad(-77.453051), np.deg2rad(166.909306), 1805.735], dtype=np.float64)
+
+        ecef = llh2ecef(llh)
+
+        self.assertAlmostEqual(ecef[0], -1_353_875.822, delta=500) # see warning
+        self.assertAlmostEqual(ecef[1], 314_824.972, delta=500) # see warning
+        self.assertAlmostEqual(ecef[2], -6_205_811.52, delta=500) # see warning
+
+    def test_dumont(self):
+        # Position from https://network.igs.org/DUMG00ATA converted with https://www.convertecef.com/
+        llh = np.array([np.deg2rad(-66.665169), np.deg2rad(140.002200), -3.38], dtype=np.float64)
+
+        ecef = llh2ecef(llh)
+        self.assertAlmostEqual(ecef[0], -1940884.12, delta=DISTANCE_PRECISION)
+        self.assertAlmostEqual(ecef[1], 1628468.15, delta=DISTANCE_PRECISION)
+        self.assertAlmostEqual(ecef[2], -5833719.93, delta=DISTANCE_PRECISION)
+
+    def test_receiver(self):
+        receiver_position_llh = np.array([ np.deg2rad(42.3221), np.deg2rad(-71.3576), 84.7], dtype=np.float64)
+
+        receiver_position_ecef = llh2ecef(receiver_position_llh)
+        self.assertAlmostEqual(receiver_position_ecef[0], 1_509_771.99, delta=DISTANCE_PRECISION)
+        self.assertAlmostEqual(receiver_position_ecef[1], -4_475_238.73, delta=DISTANCE_PRECISION)
+        self.assertAlmostEqual(receiver_position_ecef[2], 4_272_181.45, delta=DISTANCE_PRECISION)
+
+    def test_matlab(self):
+        # Position from https://la.mathworks.com/help/map/ref/geodetic2ecef.html
+        # WARNING: low presicion estimate
+        lat = 48.8562
+        lon = 2.3508
+        h = 0.0674
+        llh = np.array([np.deg2rad(lat), np.deg2rad(lon), h], dtype=np.float64)
+        ecef = llh2ecef(llh)
+
+        self.assertAlmostEqual(ecef[0], 4.2010e+06, delta=1000) # see warning
+        self.assertAlmostEqual(ecef[1], 172.4603e+03, delta=1000) # see warning
+        self.assertAlmostEqual(ecef[2], 4.7801e+06, delta=1000) # see warning
+
+
+class Ecef2LlhTest(unittest.TestCase):
     def test_trivial_0(self):
         llh = ecef2llh(np.array([WSG84_SEMI_MAJOR_AXIS, 0, 0]))
 

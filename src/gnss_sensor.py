@@ -1,8 +1,7 @@
 from typing import Tuple, List
 
 import numpy as np
-from astropy.time import TimeGPS
-from skyfield.timelib import Time
+from astropy.time import TimeGPS, Time
 
 from src.antenna_simulator import AntennaSimulator
 from src.solver import Solver
@@ -27,7 +26,7 @@ class GnssSensor:
         print("GPS time")
         print(time_gps)
         print("UTC time")
-        print(time_utc.utc_datetime())
+        print(time_utc.strftime('%Y-%m-%d %H:%M:%S'))
 
         print("Satelite positions")
         print(satellite_positions_ecef)
@@ -38,7 +37,7 @@ class GnssSensor:
         # TODO check if satellites are over the horizon
         player_position = player_positions[-1]
 
-        time_of_week_gps_seconds = time_gps2seconds_of_week(time_utc.to_astropy().gps)
+        time_of_week_gps_seconds = time_gps2seconds_of_week(time_gps.value)
 
         visible_index = np.array([
             is_satellite_overhead(player_position, satellite_position, self.cutoff_elevation_rad)

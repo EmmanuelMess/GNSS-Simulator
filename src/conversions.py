@@ -5,19 +5,38 @@ from src.numpy_types import array3d
 
 SECONDS_IN_WEEK = np.int64(7 * 24 * 60 * 60)
 
+# WGS84 constants
+A_EARTH = np.float64(6_378_137.0)
+F_EARTH = 1 / np.float64(298.257_223_563)
+B_EARTH = A_EARTH * (1.0 - F_EARTH)
+E2_EARTH = 2 * F_EARTH - F_EARTH ** 2
+
+
 def toVector2(array: array3d) -> Vector2:
     return Vector2(array[0].item(), array[1].item())
+
+
+def llh2ecef(position: array3d) -> array3d:
+    """
+     From https://gssc.esa.int/navipedia/index.php/Ellipsoidal_and_Cartesian_Coordinates_Conversion
+    """
+    lat = position[0]
+    lon = position[1]
+    alt = position[2]
+
+    n = A_EARTH / np.sqrt(1.0 - E2_EARTH * np.sin(lat) ** 2)
+
+    x = (n + alt) * np.cos(lat) * np.cos(lon)
+    y = (n + alt) * np.cos(lat) * np.sin(lon)
+    z = ((1.0 - E2_EARTH) * n + alt) * np.sin(lat)
+
+    return np.array([x, y, z], dtype=np.float64)
+
 
 def ecef2llh(position: array3d):
     """
      From https://gssc.esa.int/navipedia/index.php/Ellipsoidal_and_Cartesian_Coordinates_Conversion
     """
-    # WGS84 constants
-    a = np.float64(6_378_137.0)
-    f = 1 / np.float64(298.257_223_563)
-    b = a * (1.0 - f)
-    e_2 = 2 * f - f**2
-
     x, y, z = position[0], position[1], position[2]
 
     l = np.atan2(y, x)
@@ -26,15 +45,15 @@ def ecef2llh(position: array3d):
 
     if p < 1e-20:
         if z >= 0:
-            return np.array([np.pi/2, 0, z - b])
+            return np.array([np.pi/2, 0, z - B_EARTH])
         else:
-            return np.array([-np.pi/2, 0, -z - b])
+            return np.array([-np.pi/2, 0, -z - B_EARTH])
 
-    theta = np.atan(z/((1- e_2) * p))
+    theta = np.atan(z/((1- E2_EARTH) * p))
     for i in range(100):
-        N = a / np.sqrt(1 - e_2 * np.sin(theta) ** 2)
+        N = A_EARTH / np.sqrt(1 - E2_EARTH * np.sin(theta) ** 2)
         h = p / np.cos(theta) - N
-        new_theta = np.atan(z / ((1 - e_2 * (N / (N + h))) * p))
+        new_theta = np.atan(z / ((1 - E2_EARTH * (N / (N + h))) * p))
 
         if np.abs(theta - new_theta) < 1e-9: # See https://wiki.openstreetmap.org/wiki/Precision_of_coordinates
             break
