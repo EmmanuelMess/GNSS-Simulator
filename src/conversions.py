@@ -3,6 +3,8 @@ from pyray import Vector2
 
 from src.numpy_types import array3d
 
+SECONDS_IN_WEEK = np.int64(7 * 24 * 60 * 60)
+
 def toVector2(array: array3d) -> Vector2:
     return Vector2(array[0].item(), array[1].item())
 
@@ -92,9 +94,9 @@ def time_gps2week_number(time_gps: np.float64) -> int:
     Given a time in seconds since GPS epoch, returns the amount of weeks since GPS epoch. This can be done this way
     because the GPS time is aligned with the start of the week
     """
-    seconds_in_week = 7 * 24 * 60 * 60
 
-    return np.int64(np.floor(time_gps / seconds_in_week)).item()
+    return np.int64(np.floor(time_gps / SECONDS_IN_WEEK)).item()
+
 
 def gps_seconds_wrap(seconds_of_week: int) -> int:
     """

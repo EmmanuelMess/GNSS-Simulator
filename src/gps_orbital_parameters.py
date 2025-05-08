@@ -1,7 +1,6 @@
 import re
 from dataclasses import dataclass
 import astropy.units as u
-from astropy.time import TimeDelta
 
 import numpy as np
 from astropy.time import Time
@@ -54,6 +53,7 @@ def from_rinex(string: str) -> GpsOrbitalParameters:
     the parameters were read correctly.
     """
 
+    # TODO use columns instead of format
     def convert_float(text: str) -> np.float64:
         text = text.replace("D", "E")
         text = text.replace("d", "e")
