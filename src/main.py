@@ -19,7 +19,16 @@ from src.skyplot import get_skyplot
 from src import gps_orbital_parameters
 from src.gps_satellite import GpsSatellite
 
-SATELLITE_FILENAMES = ["dumg/03.orbit", "dumg/04.orbit", "dumg/06.orbit", "dumg/09.orbit", "dumg/11.orbit", "dumg/26.orbit", "dumg/28.orbit", "dumg/31.orbit"]
+DUMG_START_TIME = "2025-01-01T09:00:00.000"
+START_RECEIVER_POSITION_DUMG = llh2ecef(np.array([np.deg2rad(-66.665169), np.deg2rad(140.002200), -3.38], dtype=np.float64))
+DUMG_SATELLITES = ["dumg/03.orbit", "dumg/04.orbit", "dumg/06.orbit", "dumg/09.orbit", "dumg/11.orbit", "dumg/26.orbit",
+                   "dumg/28.orbit", "dumg/31.orbit"]
+INVENTED_START_TIME = "2025-05-01T09:00:00.000"
+START_RECEIVER_POSITION_INVENTED = llh2ecef(np.array([np.deg2rad(0.0), np.deg2rad(0.0), 0.0], dtype=np.float64))
+INVENTED_SATELLITES = ["invented-0lat-0lon/01.orbit", "invented-0lat-0lon/02.orbit", "invented-0lat-0lon/03.orbit",
+                       "invented-0lat-0lon/04.orbit", "invented-0lat-0lon/05.orbit", "invented-0lat-0lon/06.orbit"]
+SATELLITE_FILENAMES = INVENTED_SATELLITES
+START_TIME = INVENTED_START_TIME
 PIXELS_TO_METERS = 1/10
 METERS_TO_PIXELS = 1/PIXELS_TO_METERS
 MOVEMENT_SPEED_METERS_PER_SECOND = 5.0
@@ -100,9 +109,8 @@ def main():
     # Implementation specific constants
     width, height = 800, 450
     rng = np.random.default_rng()
-    start_time_string = "2025-01-01T09:00:00.000"
-    start_time = Time(start_time_string, format="isot", scale="utc")
-    start_receiver_position = llh2ecef(np.array([np.deg2rad(-66.665169), np.deg2rad(140.002200), -3.38], dtype=np.float64)) # TODO move to the other constants as lat long height
+    start_time = Time(START_TIME, format="isot", scale="utc")
+    start_receiver_position = START_RECEIVER_POSITION_INVENTED
     gps_start_time = time2gps(start_time)
     satellite_orbits: List[GpsSatellite] = []
 
