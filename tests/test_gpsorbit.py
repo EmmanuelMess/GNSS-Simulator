@@ -4,6 +4,7 @@ import numpy as np
 from astropy.time import Time, TimeGPS
 
 from src import gps_orbital_parameters
+from src.conversions import time2gps
 from src.gps_orbital_parameters import GpsOrbitalParameters
 from src.gps_satellite import GpsSatellite
 
@@ -66,7 +67,7 @@ class GpsOrbitTest(unittest.TestCase):
         self.assertAlmostEqual(position[2], np.float64(-1_945_051.56), delta=0.1)
         # Velocity makes no sense for this example
 
-    def test_precise(self):
+    def test_precise_0(self):
         # Data from COD0MGXFIN_20251000000_01D_05M_ORB.SP3 and CORD00ARG_R_20251000000_01D_GN.rnx
         # Courtesy of NASA's CDDIS database
         
@@ -83,14 +84,38 @@ G06 2025 04 09 23 59 44-2.959421835840E-04-2.148681232939E-11 0.000000000000E+00
         """)
         satellite = GpsSatellite(satellite_parameters)
         # 2025  4 10  0  0  0.00000000 GPS
-        calculated_position_time = Time(1428278400.0, format="gps")
+        calculated_position_time = time2gps(Time(1428278400.0, format="gps"))
         (position, velocity) = satellite.position_velocity(calculated_position_time)
         # Here error is larger because the estimated satellite position is an amalgamation of data
         # PG06  23201.392605  -4035.022068 -12344.501318   -295.941970
         self.assertAlmostEqual(position[0], np.float64(23_201_392.605), delta=5.0)
         self.assertAlmostEqual(position[1], np.float64(-4_035_022.068), delta=5.0)
         self.assertAlmostEqual(position[2], np.float64(-12_344_501.318), delta=5.0)
-        
+
+    def test_precise_1(self):
+        # Data from COD0MGXFIN_20250010000_01D_05M_ORB.SP3 and DUMG00ATA_R_20250010000_01D_GN.rnx
+        # Courtesy of NASA's CDDIS database
+
+        # 2025 01 01 08 00 00 GPS
+        satellite_parameters = gps_orbital_parameters.from_rinex("""\
+G03 2025 01 01 08 00 00 6.371350027621D-04 7.958078640513D-12 0.000000000000D+00
+     1.890000000000D+02-1.086875000000D+02 4.158387499245D-09-2.490297162278D+00
+    -5.532056093216D-06 5.664711818099D-03 1.670792698860D-06 5.153604104996D+03
+     2.880000000000D+05 8.195638656616D-08-8.084467420233D-01 2.235174179077D-08
+     9.876358017611D-01 3.614062500000D+02 1.146133193117D+00-8.093194256883D-09
+    -1.607209803882D-10 1.000000000000D+00 2.347000000000D+03 0.000000000000D+00
+     4.000000000000D+00 0.000000000000D+00 1.396983861923D-09 1.890000000000D+02
+     2.808000000000D+05 4.000000000000D+00\
+                """)
+        satellite = GpsSatellite(satellite_parameters)
+        # 2025  1  1  9  0  0.00000000 GPS
+        calculated_position_time = time2gps(Time(1419757218.0, format="gps"))
+        (position, velocity) = satellite.position_velocity(calculated_position_time)
+        # Here error is larger because the estimated satellite position is an amalgamation of data
+        # PG03 -17038.762554  12232.489979 -16388.346180    637.165738
+        self.assertAlmostEqual(position[0], np.float64(-17_038_762.554), delta=5.0)
+        self.assertAlmostEqual(position[1], np.float64(12_232_489.979), delta=5.0)
+        self.assertAlmostEqual(position[2], np.float64(-16_388_346.180), delta=5.0)
 
 if __name__ == '__main__':
     unittest.main()

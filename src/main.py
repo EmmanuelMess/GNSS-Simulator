@@ -103,8 +103,7 @@ def main():
     start_time_string = "2025-01-01T09:00:00.000"
     start_time = Time(start_time_string, format="isot", scale="utc")
     start_receiver_position = llh2ecef(np.array([np.deg2rad(-66.665169), np.deg2rad(140.002200), -3.38], dtype=np.float64)) # TODO move to the other constants as lat long height
-    gps_start_time = Time(start_time)
-    gps_start_time.format = "gps"
+    gps_start_time = time2gps(start_time)
     satellite_orbits: List[GpsSatellite] = []
 
     # Get satellites, filter by availability
@@ -127,7 +126,7 @@ def main():
     print(f"Satellite positions: {[np.round(np.rad2deg(ecef2llh(satellite.position_velocity(gps_start_time)[0]))) for satellite in cut_satellite_orbits]}")
     print(f"Satellite velocities: {[satellite.position_velocity(gps_start_time)[1] for satellite in cut_satellite_orbits]}")
     print(f"Satelite clock biases: {SATELLITE_CLOCK_BIAS}")
-    print(f"Seconds of week to first epoch {time_gps2seconds_of_week(gps_start_time.value)}")
+    print(f"Seconds of week to first epoch {time_gps2seconds_of_week(gps_start_time.gps)}")
 
     rinex_generator = create_rinex_generator(start_receiver_position, cut_satellite_orbits, list(SATELLITE_CLOCK_BIAS),
                                              start_time, gps_start_time)
@@ -152,8 +151,8 @@ def main():
         delta = get_frame_time()
 
         time_utc += dt.timedelta(seconds=delta)
-        time_gps = Time(time_utc)
-        time_gps.format = "gps"
+        time_gps = time2gps(time_utc)
+
         time_since_gnss += delta
 
         satellite_positions_velocities = np.array([satellite.position_velocity(time_gps) for satellite in cut_satellite_orbits], dtype=np.float64)

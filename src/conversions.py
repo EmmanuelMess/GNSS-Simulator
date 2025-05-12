@@ -1,5 +1,7 @@
 import numpy as np
+from astropy.time import TimeDelta, Time
 from pyray import Vector2
+import astropy.units as u
 
 from src.numpy_types import array3d
 
@@ -115,6 +117,18 @@ def time_gps2week_number(time_gps: np.float64) -> int:
     """
 
     return np.int64(np.floor(time_gps / SECONDS_IN_WEEK)).item()
+
+
+def time2gps(time: Time) -> Time:
+    """
+    This is a hack because astropy doesn't have the needed GPS time scale that start from 1980 and only takes into
+    account future leap seconds.
+    See https://github.com/astropy/astropy/issues/11265
+    """
+    AMOUNT_OF_LEAP_SECONDS_AT_GPS_EPOCH = 19
+    gps_time = time.tai + TimeDelta(-AMOUNT_OF_LEAP_SECONDS_AT_GPS_EPOCH * u.s)
+
+    return gps_time
 
 
 def gps_seconds_wrap(seconds_of_week: int) -> int:

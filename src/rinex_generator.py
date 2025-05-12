@@ -2,7 +2,7 @@ import os
 from typing import List
 
 import numpy as np
-from astropy.time import TimeGPS, Time
+from astropy.time import Time
 
 from numpy_types import array3d
 from src.gps_orbital_parameters import GpsOrbitalParameters
@@ -15,7 +15,7 @@ class RinexGenerator:
     RINEX can only be generated with GPS data
     """
 
-    def __init__(self, folder: os.path, approximate_start_position: array3d, utc_start: Time, gps_start: TimeGPS):
+    def __init__(self, folder: os.path, approximate_start_position: array3d, utc_start: Time, gps_start: Time):
         self.folder = folder
 
         # TODO make it auto close the files
@@ -41,7 +41,7 @@ class RinexGenerator:
         self.navigation_file.write(f"                                                            END OF HEADER       \n")
 
     def _write_header_observations_file(self, approximate_start_position: array3d, time_utc: Time,
-                                        time_of_first_observation: TimeGPS):
+                                        time_of_first_observation: Time):
         position_x = np.round(approximate_start_position[0], 4)
         position_y = np.round(approximate_start_position[1], 4)
         position_z = np.round(approximate_start_position[2], 4)
@@ -132,7 +132,7 @@ class RinexGenerator:
         for satellite, satellite_clock_bias in zip(satellites, satellite_clock_biases):
             self._add_satellite(satellite.parameters())
 
-    def add_position(self, time_gps: TimeGPS, prns: List[int], pseudoranges: List[np.float64],
+    def add_position(self, time_gps: Time, prns: List[int], pseudoranges: List[np.float64],
                      direct_doppler: List[np.float64]):
         observed_satellites = len(pseudoranges)
 

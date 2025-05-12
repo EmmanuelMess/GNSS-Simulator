@@ -12,17 +12,13 @@ class GpsSatellite:
     def __init__(self, orbit_parameters: GpsOrbitalParameters):
         self.orbit_parameters = orbit_parameters
 
-    def position_velocity(self, time: Time) -> Tuple[array3d, array3d]:
-        time.format = "gps"
-
+    def position_velocity(self, gps_time: Time) -> Tuple[array3d, array3d]:
         # Gravitational effect of the Earth
         mu = np.float64(3.986005e14)
         # Rate of rotation of the Earth
         omega_dot_e = np.float64(7.2921151467e-5)
 
-        gps_week_time = time_gps2seconds_of_week(time.value)
-        gps_week_number = time_gps2week_number(time.value)
-
+        prn = self.orbit_parameters.prn_number
         e = self.orbit_parameters.eccentricity
         sqrt_a =  self.orbit_parameters.square_root_of_semi_major_axis
         omega_0 =  self.orbit_parameters.longitude_of_ascending_node_of_orbit_plane_at_weekly_epoch
@@ -43,8 +39,8 @@ class GpsSatellite:
         a = sqrt_a ** 2
         # Mean motion
         n_0 = np.sqrt(mu / a ** 3)
-        t_oe = time_gps2seconds_of_week(self.orbit_parameters.epoch.value)
-        t = time_gps2seconds_of_week(time.value)
+        t_oe = time_gps2seconds_of_week(self.orbit_parameters.epoch.gps)
+        t = time_gps2seconds_of_week(gps_time.gps)
         tk = gps_seconds_wrap(t - t_oe)
         # Corrected mean motion
         n = n_0 + delta_n

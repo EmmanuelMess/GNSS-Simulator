@@ -5,6 +5,8 @@ import astropy.units as u
 import numpy as np
 from astropy.time import Time
 
+from src.conversions import time2gps
+
 
 @dataclass
 class GpsOrbitalParameters:
@@ -65,7 +67,8 @@ def from_rinex(string: str) -> GpsOrbitalParameters:
     week_of_year = convert_float(matches.group("gps_week"))
     toe = convert_float(matches.group("toe"))
 
-    epoch = Time(week_of_year * u.week + toe * u.s, format='gps')
+    # HACK read the time2gps docs
+    epoch = time2gps(Time(week_of_year * u.week + toe * u.s, format='gps'))
 
     parameters = GpsOrbitalParameters(
         satellite_system = matches.group("system"),
