@@ -69,19 +69,7 @@ class RinexGenerator:
 
     def _add_satellite(self, gps_parameters: GpsOrbitalParameters):
         def format_rinex_float(value: np.float64) -> str:
-            """
-            This formats the value as 4X, 4D19.12 format. If the value is not finite, the result is malformed.
-            TODO delete this function
-            """
-            if not np.isfinite(value):
-                return f"{value}"
-
-            sign = '-' if value < 0 else ' '
-            abs_value = np.abs(value)
-            exponent = 1 + np.int32(np.floor(np.log10(abs_value))).item() if value != 0 else 0
-            mantissa = abs_value / (10 ** exponent)
-            mantissa_str = f'{mantissa:.12f}'.replace("0.", ".")
-            return f'{sign}{mantissa_str}E{exponent:+03d}'
+            return f"{value:+1.12e}"
 
         satellite_system = gps_parameters.satellite_system
         prn = gps_parameters.prn_number
@@ -116,14 +104,14 @@ class RinexGenerator:
         transmission_time = format_rinex_float(gps_parameters.transmission_time_of_message)
         fit_interval = format_rinex_float(gps_parameters.fit_interval_in_hours)
 
-        self.navigation_file.write(f"{satellite_system}{prn:>2} {epoch} {sv_clock_bias} {sv_clock_drift} {sv_clock_drift_rate}\n")
-        self.navigation_file.write(f"     {iode} {crs} {delta_n} {m0}\n")
-        self.navigation_file.write(f"     {cuc} {e} {cus} {sqrt_a}\n")
-        self.navigation_file.write(f"     {toe} {cic} {omega0} {cis}\n")
-        self.navigation_file.write(f"     {i0} {crc} {omega} {omega_dot}\n")
-        self.navigation_file.write(f"     {idot} {codes_on_l2} {gps_week_number} {l2_p_flag}\n")
-        self.navigation_file.write(f"     {sv_accuracy} {sv_health} {tgd} {iodc}\n")
-        self.navigation_file.write(f"     {transmission_time} {fit_interval}\n")
+        self.navigation_file.write(f"{satellite_system}{prn:>2} {epoch}{sv_clock_bias}{sv_clock_drift}{sv_clock_drift_rate}\n")
+        self.navigation_file.write(f"    {iode}{crs}{delta_n}{m0}\n")
+        self.navigation_file.write(f"    {cuc}{e}{cus}{sqrt_a}\n")
+        self.navigation_file.write(f"    {toe}{cic}{omega0}{cis}\n")
+        self.navigation_file.write(f"    {i0}{crc}{omega}{omega_dot}\n")
+        self.navigation_file.write(f"    {idot}{codes_on_l2}{gps_week_number}{l2_p_flag}\n")
+        self.navigation_file.write(f"    {sv_accuracy}{sv_health}{tgd}{iodc}\n")
+        self.navigation_file.write(f"    {transmission_time}{fit_interval}\n")
 
     def add_satellites(self, satellites: List[GpsSatellite], satellite_clock_biases: List[np.float64]):
         if len(satellites) != len(satellite_clock_biases):
