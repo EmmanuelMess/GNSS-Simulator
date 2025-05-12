@@ -18,8 +18,7 @@ class GpsOrbitTest(unittest.TestCase):
         mean_anomaly: np.float64 = np.float64(2.367_757_296_49)
         sqrt_semi_major_axis: np.float64 = np.float64(6_499.315_173_94)
 
-        epoch = Time("2025-04-19 09:46:50.000", format="iso")
-        epoch.format = "gps"
+        epoch = time2gps(Time("2025-04-19 09:46:50.000", format="iso"))
 
         satellite_parameters = GpsOrbitalParameters(
             satellite_system="G",
@@ -56,8 +55,7 @@ class GpsOrbitTest(unittest.TestCase):
             fit_interval_in_hours=np.float64(0.0),
         )
 
-        calculated_position_time = Time("2025-04-19 09:00:00.000", format="iso")
-        calculated_position_time.format = "gps"
+        calculated_position_time = time2gps(Time("2025-04-19 09:00:00.000", format="iso"))
         satellite = GpsSatellite(satellite_parameters)
         (position, velocity) = satellite.position_velocity(calculated_position_time)
 
