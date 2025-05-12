@@ -1,8 +1,13 @@
 import unittest
 
 import numpy as np
+from astropy.time import Time
+import astropy.units as u
 
 from src import gps_orbital_parameters
+from src.conversions import time2gps
+from src.rinex_generator import RinexGenerator
+
 
 class ReadRinex(unittest.TestCase):
     def test_read(self):
@@ -19,9 +24,11 @@ G06 2025 04 09 23 59 44-2.959421835840E-04-2.148681232939E-11 0.000000000000E+00
 
         satellite = gps_orbital_parameters.from_rinex(rinex_text)
 
+        epoch = time2gps(Time(2.361000000000E+03 * u.week + 3.455840000000E+05 * u.s, format="gps"))
+
         self.assertEqual(satellite.satellite_system, "G")
         self.assertEqual(satellite.prn_number, 6)
-        self.assertAlmostEqual(satellite.epoch.value, 2.361000000000E+03 * 7 * 24 * 60 * 60 + 3.455840000000E+05, delta=1.0)
+        self.assertAlmostEqual(satellite.epoch.gps, epoch.gps, delta=1.0)
         self.assertAlmostEqual(satellite.sv_clock_bias, np.float64(-2.959421835840E-04), places=13)
         self.assertAlmostEqual(satellite.sv_clock_drift, np.float64(-2.148681232939E-11), places=13)
         self.assertAlmostEqual(satellite.sv_clock_drift_rate, np.float64(0.000000000000E+00), places=13)
@@ -52,6 +59,24 @@ G06 2025 04 09 23 59 44-2.959421835840E-04-2.148681232939E-11 0.000000000000E+00
         self.assertAlmostEqual(satellite.transmission_time_of_message, np.float64(3.398820000000E+05), places=13)
         self.assertAlmostEqual(satellite.fit_interval_in_hours, np.float64(4.000000000000E+00), places=13)
 
+
+    def test_read_write(self):
+        rinex_reference = """\
+G06 2025 04 09 23 59 44-2.959421835840E-04-2.148681232939E-11 0.000000000000E+00
+     5.000000000000E+00-9.875000000000E+00 3.730869691412E-09-1.899624399301E+00
+    -5.550682544708E-07 3.463134868070E-03 1.232884824276E-05 5.153554180145E+03
+     3.455840000000E+05-9.499490261078E-08 2.686281956689E+00-3.539025783539E-08
+     9.890951254507E-01 1.600000000000E+02-6.486031939322E-01-7.595316375414E-09
+    -1.135761594744E-10 1.000000000000E+00 2.361000000000E+03 0.000000000000E+00
+     2.000000000000E+00 0.000000000000E+00 3.725290298462E-09 5.000000000000E+00
+     3.398820000000E+05 4.000000000000E+00\
+             """
+
+        satellite_reference = gps_orbital_parameters.from_rinex(rinex_reference)
+        rinex_generated = RinexGenerator._satellite_rinex(satellite_reference)
+        satellite_generated = gps_orbital_parameters.from_rinex(rinex_generated)
+
+        self.assertEquals(satellite_reference, satellite_generated)
 
 if __name__ == '__main__':
     unittest.main()

@@ -4,7 +4,7 @@ from typing import List
 import numpy as np
 from astropy.time import Time
 
-from numpy_types import array3d
+from src.numpy_types import array3d
 from src.gps_orbital_parameters import GpsOrbitalParameters
 from src.gps_satellite import GpsSatellite
 
@@ -67,7 +67,11 @@ class RinexGenerator:
         self.observations_file.write(f"                                                            GLONASS COD/PHS/BIS \n") # TODO check this is valid
         self.observations_file.write(f"                                                            END OF HEADER       \n")
 
-    def _add_satellite(self, gps_parameters: GpsOrbitalParameters):
+    @staticmethod
+    def _satellite_rinex(gps_parameters: GpsOrbitalParameters):
+        """
+        Separated into a function mostly for testing
+        """
         def format_rinex_float(value: np.float64) -> str:
             return f"{value:+1.12e}"
 
@@ -104,21 +108,24 @@ class RinexGenerator:
         transmission_time = format_rinex_float(gps_parameters.transmission_time_of_message)
         fit_interval = format_rinex_float(gps_parameters.fit_interval_in_hours)
 
-        self.navigation_file.write(f"{satellite_system}{prn:>2} {epoch}{sv_clock_bias}{sv_clock_drift}{sv_clock_drift_rate}\n")
-        self.navigation_file.write(f"    {iode}{crs}{delta_n}{m0}\n")
-        self.navigation_file.write(f"    {cuc}{e}{cus}{sqrt_a}\n")
-        self.navigation_file.write(f"    {toe}{cic}{omega0}{cis}\n")
-        self.navigation_file.write(f"    {i0}{crc}{omega}{omega_dot}\n")
-        self.navigation_file.write(f"    {idot}{codes_on_l2}{gps_week_number}{l2_p_flag}\n")
-        self.navigation_file.write(f"    {sv_accuracy}{sv_health}{tgd}{iodc}\n")
-        self.navigation_file.write(f"    {transmission_time}{fit_interval}\n")
+        return (
+            f"{satellite_system}{prn:>2} {epoch}{sv_clock_bias}{sv_clock_drift}{sv_clock_drift_rate}\n"
+            f"    {iode}{crs}{delta_n}{m0}\n"
+            f"    {cuc}{e}{cus}{sqrt_a}\n"
+            f"    {toe}{cic}{omega0}{cis}\n"
+            f"    {i0}{crc}{omega}{omega_dot}\n"
+            f"    {idot}{codes_on_l2}{gps_week_number}{l2_p_flag}\n"
+            f"    {sv_accuracy}{sv_health}{tgd}{iodc}\n"
+            f"    {transmission_time}{fit_interval}\n"
+        )
 
     def add_satellites(self, satellites: List[GpsSatellite], satellite_clock_biases: List[np.float64]):
         if len(satellites) != len(satellite_clock_biases):
             return
 
         for satellite, satellite_clock_bias in zip(satellites, satellite_clock_biases):
-            self._add_satellite(satellite.parameters())
+            rinex = self._satellite_rinex(satellite.parameters())
+            self.navigation_file.write(rinex)
 
     def add_position(self, time_gps: Time, prns: List[int], pseudoranges: List[np.float64],
                      direct_doppler: List[np.float64]):
