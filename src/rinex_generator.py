@@ -119,11 +119,8 @@ class RinexGenerator:
             f"    {transmission_time}{fit_interval}\n"
         )
 
-    def add_satellites(self, satellites: List[GpsSatellite], satellite_clock_biases: List[np.float64]):
-        if len(satellites) != len(satellite_clock_biases):
-            return
-
-        for satellite, satellite_clock_bias in zip(satellites, satellite_clock_biases):
+    def add_satellites(self, satellites: List[GpsSatellite]):
+        for satellite in satellites:
             rinex = self._satellite_rinex(satellite.parameters())
             self.navigation_file.write(rinex)
 

@@ -40,16 +40,7 @@ SKYPLOT_SIZE = 200
 GNSS_MESSAGE_FREQUENCY = 5 # Hz
 CUTOFF_ELEVATION = np.deg2rad(10)
 
-SATELLITE_CLOCK_BIAS = np.array([
-    5 * 1e-6,
-    -10 * 1e-6,
-    7 * 1e-6,
-    10 * 1e-6,
-    60 * 1e-6,
-    -100 * 1e-6,
-], dtype=np.float64)
-
-SATELLITE_NUMBER = SATELLITE_CLOCK_BIAS.shape[0]
+SATELLITE_NUMBER = 6
 
 SATELLITE_ALPHAS = np.array([
     [0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6],
@@ -93,17 +84,15 @@ NOISE_EFFECT_RATE = np.float64(5) / (NOISE_FIX_LOSS_LEVEL - NOISE_CORRECTION_LEV
 GNSS_SIGNAL_FREQUENCY = GPS_L1_FREQUENCY
 
 
-def create_rinex_generator(start_position_ecef, satellite_orbits: List[GpsSatellite],
-                           satellite_clock_biases: List[np.float64], utc_start: Time,
-                           gps_start: Time)\
-        -> RinexGenerator:
+def create_rinex_generator(start_position_ecef, satellite_orbits: List[GpsSatellite], utc_start: Time,
+                           gps_start: Time) -> RinexGenerator:
     folder_name = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     folder_path = os.path.join("output", folder_name)
     Path(folder_path).mkdir(parents=False, exist_ok=True)
 
     rinex_generator = RinexGenerator(folder_path, start_position_ecef, utc_start, gps_start)
 
-    rinex_generator.add_satellites(satellite_orbits, satellite_clock_biases)
+    rinex_generator.add_satellites(satellite_orbits)
 
     return rinex_generator
 
@@ -130,6 +119,8 @@ def main():
     ]
     cut_satellite_orbits = visible_satellite_orbits[:SATELLITE_NUMBER]
     satellite_prns: List[int] = [satellite.parameters().prn_number for satellite in cut_satellite_orbits]
+    # WARNING: the model used keeps the satellite clock bias constant
+    satellite_clock_bias = np.array([satellite.orbit_parameters.sv_clock_bias for satellite in cut_satellite_orbits], dtype=np.float64)
 
     print(f"Loaded {len(satellite_orbits)} satellites, {len(visible_satellite_orbits)} visible, cut to {SATELLITE_NUMBER}")
     print(satellite_prns)
@@ -137,16 +128,16 @@ def main():
     print(f"Satellite epochs: {[satellite.parameters().epoch.strftime('%Y-%m-%d %H:%M:%S') for satellite in cut_satellite_orbits]}")
     print(f"Satellite positions: {[np.round(np.rad2deg(ecef2llh(satellite.position_velocity(gps_start_time)[0]))) for satellite in cut_satellite_orbits]}")
     print(f"Satellite velocities: {[satellite.position_velocity(gps_start_time)[1] for satellite in cut_satellite_orbits]}")
-    print(f"Satelite clock biases: {SATELLITE_CLOCK_BIAS}")
+    print(f"Satelite clock biases: {satellite_clock_bias}")
     print(f"Seconds of week to first epoch {time_gps2seconds_of_week(gps_start_time.gps)}")
 
-    rinex_generator = create_rinex_generator(start_receiver_position, cut_satellite_orbits, list(SATELLITE_CLOCK_BIAS),
+    rinex_generator = create_rinex_generator(start_receiver_position, cut_satellite_orbits,
                                              start_time, gps_start_time)
     # Position simulation components
-    simulator = AntennaSimulator(rng, SATELLITE_NUMBER, SATELLITE_CLOCK_BIAS, GNSS_SIGNAL_FREQUENCY, SATELLITE_ALPHAS,
+    simulator = AntennaSimulator(rng, SATELLITE_NUMBER, satellite_clock_bias, GNSS_SIGNAL_FREQUENCY, SATELLITE_ALPHAS,
                                  SATELLITE_BETAS, JAMMER_NOISE, NOISE_CORRECTION_LEVEL, NOISE_FIX_LOSS_LEVEL,
                                  NOISE_EFFECT_RATE, SATELLITE_NOISE_STD, TROPOSPHERIC_CUTOFF_ANGLE)
-    solver = Solver(SATELLITE_NUMBER, SATELLITE_CLOCK_BIAS, GNSS_SIGNAL_FREQUENCY)
+    solver = Solver(SATELLITE_NUMBER, satellite_clock_bias, GNSS_SIGNAL_FREQUENCY)
     sensor = GnssSensor(simulator, solver, rinex_generator, np.array(satellite_prns, dtype=np.int64), CUTOFF_ELEVATION)
 
     # State

@@ -23,16 +23,10 @@ class GnssSensor:
                reciever_clock_bias, reciever_clock_drift, time_gps: Time, time_utc: Time)\
             -> Tuple[array3d, array3d, np.float64, np.float64]:
         print("===")
-        print("GPS time")
-        print(time_gps.strftime('%Y-%m-%d %H:%M:%S'))
-        print("UTC time")
-        print(time_utc.strftime('%Y-%m-%d %H:%M:%S'))
-
-        print("Satelite positions")
-        print(satellite_positions_ecef)
-
-        print("Satelite velocities")
-        print(satellite_velocities_ecef)
+        print(f"GPS time: {time_gps.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"UTC time: {time_utc.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Satelite positions: {satellite_positions_ecef}")
+        print(f"Satelite velocities: {satellite_velocities_ecef}")
 
         # TODO check if satellites are over the horizon
         player_position = player_positions[-1]

@@ -12,6 +12,9 @@ class GpsSatellite:
     def __init__(self, orbit_parameters: GpsOrbitalParameters):
         self.orbit_parameters = orbit_parameters
 
+        if orbit_parameters.sv_clock_drift != 0 or orbit_parameters.sv_clock_drift_rate != 0:
+            print(f"WARNING: drift and drift rate parameters are not 0 for satellite {orbit_parameters.prn_number} but clock drift will NOT be modeled!")
+
     def position_velocity(self, gps_time: Time) -> Tuple[array3d, array3d]:
         # Gravitational effect of the Earth
         mu = np.float64(3.986005e14)
