@@ -37,7 +37,6 @@ class RinexGenerator:
 
         time = utc_start.strftime('%Y%m%d %H%M%S')
 
-        #TODO add tropospheric corrections
         alpha0, alpha1, alpha2, alpha3 = (
             format(satellite_alphas[0]), format(satellite_alphas[1]), format(satellite_alphas[2]), format(satellite_alphas[3])
         )
