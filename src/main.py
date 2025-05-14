@@ -101,9 +101,11 @@ def main():
     # Implementation specific constants
     width, height = 800, 450
     rng = np.random.default_rng()
-    simulation_data = SIMULATION_DUMG
+    simulation_data = SIMULATION_0LAT0LON
     start_time = Time(simulation_data["start_time"], format="isot", scale="utc")
     start_receiver_position = simulation_data["receiver_position_start"]
+    e_axis, n_axis, u_axis = pos2enu_base(ecef2llh(start_receiver_position))
+    s_axis = -n_axis # HACK because y axis is inverted
     gps_start_time = time2gps(start_time)
     satellite_orbits: List[GpsSatellite] = []
 
@@ -125,6 +127,7 @@ def main():
     print(f"Loaded {len(satellite_orbits)} satellites, {len(visible_satellite_orbits)} visible, cut to {SATELLITE_NUMBER}")
     print(satellite_prns)
     print(f"Sim start time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Reveiver start position {start_receiver_position}, enu {e_axis} {n_axis} {u_axis}")
     print(f"Satellite epochs: {[satellite.parameters().epoch.strftime('%Y-%m-%d %H:%M:%S') for satellite in cut_satellite_orbits]}")
     print(f"Satellite positions: {[np.round(np.rad2deg(ecef2llh(satellite.position_velocity(gps_start_time)[0]))) for satellite in cut_satellite_orbits]}")
     print(f"Satellite velocities: {[satellite.position_velocity(gps_start_time)[1] for satellite in cut_satellite_orbits]}")
@@ -175,7 +178,7 @@ def main():
         else:
             player_delta_y = 0
 
-        player_delta = np.array([player_delta_x, player_delta_y, 0], dtype=np.float64)
+        player_delta = player_delta_x * e_axis + player_delta_y * s_axis
         player_delta = player_delta if np.linalg.norm(player_delta) == 0 else player_delta / np.linalg.norm(player_delta)
         player_position = player_positions[-1] + MOVEMENT_SPEED_METERS_PER_SECOND * delta * player_delta
         player_positions.append(player_position)
@@ -205,12 +208,12 @@ def main():
             clear_background(WHITE)
             draw_text(f"{time_utc.strftime('%Y-%m-%d %H:%M:%S')}", 10, 10, 14, BLACK)
 
-            draw_circle_v(toVector2(player_position_px), 5, RED)
+            draw_circle_v(toVector2(player_position_px, e_axis, s_axis), 5, RED)
 
             for gnss_position in gnss_positions:
-                draw_circle_v(toVector2((gnss_position - start_receiver_position) * METERS_TO_PIXELS), 2, GREEN)
+                draw_circle_v(toVector2((gnss_position - start_receiver_position) * METERS_TO_PIXELS, e_axis, s_axis), 2, GREEN)
 
-            draw_line_v(toVector2(player_position_px), toVector2(player_position_px + gnss_velocity_px), BLUE)
+            draw_line_v(toVector2(player_position_px, e_axis, s_axis), toVector2(player_position_px + gnss_velocity_px, e_axis, s_axis), BLUE)
 
             draw_rectangle(width - SKYPLOT_SIZE, 0, width, SKYPLOT_SIZE, WHITE)
             draw_line(width - SKYPLOT_SIZE, SKYPLOT_SIZE//2, width,  SKYPLOT_SIZE//2, GRAY)

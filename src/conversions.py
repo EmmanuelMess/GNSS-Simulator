@@ -14,8 +14,10 @@ B_EARTH = A_EARTH * (1.0 - F_EARTH)
 E2_EARTH = 2 * F_EARTH - F_EARTH ** 2
 
 
-def toVector2(array: array3d) -> Vector2:
-    return Vector2(array[0].item(), array[1].item())
+def toVector2(array: array3d, x_axis: array3d, y_axis: array3d) -> Vector2:
+    x = np.dot(array, x_axis) / np.linalg.norm(x_axis)
+    y = np.dot(array, y_axis) / np.linalg.norm(y_axis)
+    return Vector2(x.item(), y.item())
 
 
 def llh2ecef(position: array3d) -> array3d:
@@ -85,6 +87,16 @@ def ecef2aer(receiver_ecef: array3d, satellite_ecef: array3d):
     range = np.linalg.norm(delta)
 
     return np.array([azimuth, elevation, range])
+
+
+def pos2enu_base(position_llh: array3d) -> (array3d, array3d, array3d):
+    theta, l, h = position_llh[0], position_llh[1], position_llh[2]
+
+    e_unit = np.array([- np.sin(l), np.cos(l), 0])
+    n_unit = np.array([- np.cos(l) * np.sin(theta), -np.sin(l) * np.sin(theta), np.cos(theta)])
+    u_unit = np.array([np.cos(l) * np.cos(theta), np.sin(l) * np.cos(theta), np.sin(theta)])
+
+    return e_unit, n_unit, u_unit
 
 
 def rad2semicircles(value):
