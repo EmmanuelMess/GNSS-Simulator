@@ -42,23 +42,8 @@ CUTOFF_ELEVATION = np.deg2rad(10)
 
 SATELLITE_NUMBER = 6
 
-SATELLITE_ALPHAS = np.array([
-    [0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6],
-    [0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6],
-    [0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6],
-    [0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6],
-    [0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6],
-    [0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6],
-])
-
-SATELLITE_BETAS = np.array([
-    [0.7782 * 1e5, 0.3277 * 1e5, -0.6554 * 1e5, -0.1966 * 1e6],
-    [0.7782 * 1e5, 0.3277 * 1e5, -0.6554 * 1e5, -0.1966 * 1e6],
-    [0.7782 * 1e5, 0.3277 * 1e5, -0.6554 * 1e5, -0.1966 * 1e6],
-    [0.7782 * 1e5, 0.3277 * 1e5, -0.6554 * 1e5, -0.1966 * 1e6],
-    [0.7782 * 1e5, 0.3277 * 1e5, -0.6554 * 1e5, -0.1966 * 1e6],
-    [0.7782 * 1e5, 0.3277 * 1e5, -0.6554 * 1e5, -0.1966 * 1e6],
-])
+SATELLITE_ALPHAS = np.array([0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6], dtype=np.float64)
+SATELLITE_BETAS = np.array([0.7782 * 1e5, 0.3277 * 1e5, -0.6554 * 1e5, -0.1966 * 1e6], dtype=np.float64)
 
 RECEIVER_CLOCK_BIAS = np.float64(1 * 1e-3)
 # Walk of 0.1us per second
@@ -85,12 +70,14 @@ GNSS_SIGNAL_FREQUENCY = GPS_L1_FREQUENCY
 
 
 def create_rinex_generator(start_position_ecef, satellite_orbits: List[GpsSatellite], utc_start: Time,
-                           gps_start: Time) -> RinexGenerator:
+                           gps_start: Time, satellite_alphas: np.ndarray[4, np.float64],
+                           satellite_betas: np.ndarray[4, np.float64]) -> RinexGenerator:
     folder_name = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     folder_path = os.path.join("output", folder_name)
     Path(folder_path).mkdir(parents=False, exist_ok=True)
 
-    rinex_generator = RinexGenerator(folder_path, start_position_ecef, utc_start, gps_start)
+    rinex_generator = RinexGenerator(folder_path, start_position_ecef, utc_start, gps_start, satellite_alphas,
+                                     satellite_betas)
 
     rinex_generator.add_satellites(satellite_orbits)
 
@@ -134,8 +121,8 @@ def main():
     print(f"Satelite clock biases: {satellite_clock_bias}")
     print(f"Seconds of week to first epoch {time_gps2seconds_of_week(gps_start_time.gps)}")
 
-    rinex_generator = create_rinex_generator(start_receiver_position, cut_satellite_orbits,
-                                             start_time, gps_start_time)
+    rinex_generator = create_rinex_generator(start_receiver_position, cut_satellite_orbits, start_time, gps_start_time,
+                                             SATELLITE_ALPHAS, SATELLITE_BETAS)
     # Position simulation components
     simulator = AntennaSimulator(rng, SATELLITE_NUMBER, satellite_clock_bias, GNSS_SIGNAL_FREQUENCY, SATELLITE_ALPHAS,
                                  SATELLITE_BETAS, JAMMER_NOISE, NOISE_CORRECTION_LEVEL, NOISE_FIX_LOSS_LEVEL,

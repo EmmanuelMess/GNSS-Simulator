@@ -6,9 +6,10 @@ from src.constants import GPS_L1_FREQUENCY
 
 
 class AntennaSimulator:
-    def __init__(self, rng, satellite_amount, satellite_clock_bias, satellite_frequency, satellite_alphas,
-                 satellite_betas, jammer_noise: np.float64, noise_correction_level, noise_fix_loss_level,
-                 noise_effect_rate, satellite_noise_std, tropospheric_cutoff_angle):
+    def __init__(self, rng, satellite_amount, satellite_clock_bias, satellite_frequency,
+                 satellite_alphas: np.ndarray[4, np.float64], satellite_betas: np.ndarray[4, np.float64],
+                 jammer_noise: np.float64, noise_correction_level, noise_fix_loss_level, noise_effect_rate,
+                 satellite_noise_std, tropospheric_cutoff_angle):
         self.rng = rng
         self.satellite_amount = satellite_amount
         self.satellite_clock_bias = satellite_clock_bias
@@ -54,19 +55,19 @@ class AntennaSimulator:
 
         slant_factor = 1 + 16 * (0.53 - elevation_semicircles) ** 3
 
-        period_ionospheric_delay = self.satellite_betas[:, 0] \
-                                   + self.satellite_betas[:, 1] * geomagnetic_latitude_semicircles \
-                                   + self.satellite_betas[:, 2] * geomagnetic_latitude_semicircles**2 \
-                                   + self.satellite_betas[:, 3] * geomagnetic_latitude_semicircles**3
+        period_ionospheric_delay = self.satellite_betas[0] \
+                                 + self.satellite_betas[1] * geomagnetic_latitude_semicircles \
+                                 + self.satellite_betas[2] * geomagnetic_latitude_semicircles**2 \
+                                 + self.satellite_betas[3] * geomagnetic_latitude_semicircles**3
 
         period_ionospheric_delay = np.clip(period_ionospheric_delay, a_min=72_000, a_max=None)
 
         phase_ionospheric_delay = 2 * np.pi * (local_time_pierce_point - 50_400) / period_ionospheric_delay
 
-        amplitude_ionospheric_delay = self.satellite_alphas[:, 0] \
-                                    + self.satellite_alphas[:, 1] * geomagnetic_latitude_semicircles \
-                                    + self.satellite_alphas[:, 2] * geomagnetic_latitude_semicircles**2 \
-                                    + self.satellite_alphas[:, 3] * geomagnetic_latitude_semicircles**3
+        amplitude_ionospheric_delay = self.satellite_alphas[0] \
+                                    + self.satellite_alphas[1] * geomagnetic_latitude_semicircles \
+                                    + self.satellite_alphas[2] * geomagnetic_latitude_semicircles**2 \
+                                    + self.satellite_alphas[3] * geomagnetic_latitude_semicircles**3
         amplitude_ionospheric_delay = np.clip(amplitude_ionospheric_delay, a_min=0, a_max=None)
 
 

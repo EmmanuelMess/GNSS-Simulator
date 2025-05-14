@@ -15,7 +15,8 @@ class RinexGenerator:
     RINEX can only be generated with GPS data
     """
 
-    def __init__(self, folder: os.path, approximate_start_position: array3d, utc_start: Time, gps_start: Time):
+    def __init__(self, folder: os.path, approximate_start_position: array3d, utc_start: Time, gps_start: Time,
+                 satellite_alphas: np.ndarray[4, np.float64], satellite_betas: np.ndarray[4, np.float64]):
         self.folder = folder
 
         # TODO make it auto close the files
@@ -26,16 +27,28 @@ class RinexGenerator:
         self.navigation_file = open(os.path.join(folder, f"{file_name}P"), "w") #TODO fix name
         self.observations_file = open(os.path.join(folder, f"{file_name}O"), "w") #TODO fix name
 
-        self._write_header_navigation_file()
+        self._write_header_navigation_file(utc_start, satellite_alphas, satellite_betas)
         self._write_header_observations_file(approximate_start_position, utc_start, gps_start)
 
+    def _write_header_navigation_file(self, utc_start: Time, satellite_alphas: np.ndarray[4, np.float64],
+                                      satellite_betas: np.ndarray[4, np.float64]):
+        def format(value: np.float64) -> str:
+            return f"{value:+1.3e}"
 
-    def _write_header_navigation_file(self):
-        #TODO add ionospheric and tropospheric corrections
+        time = utc_start.strftime('%Y%m%d %H%M%S')
 
+        #TODO add tropospheric corrections
+        alpha0, alpha1, alpha2, alpha3 = (
+            format(satellite_alphas[0]), format(satellite_alphas[1]), format(satellite_alphas[2]), format(satellite_alphas[3])
+        )
+        beta0, beta1, beta2, beta3 = (
+            format(satellite_betas[0]), format(satellite_betas[1]), format(satellite_betas[2]), format(satellite_betas[3])
+        )
 
         self.navigation_file.write(f"     3.03           N: GNSS NAV DATA    G: GPS              RINEX VERSION / TYPE\n")
-        self.navigation_file.write(f"GnssSim CIFASIS                         20231226 160817 UTC PGM / RUN BY / DATE \n")
+        self.navigation_file.write(f"GnssSim CIFASIS                         {time: >15} UTC PGM / RUN BY / DATE \n")
+        self.navigation_file.write(f"GPSA    {alpha0: >12}{alpha1: >12}{alpha2: >12}{alpha3: >12}    IONOSPHERIC CORR \n")
+        self.navigation_file.write(f"GPSB    {beta0: >12}{beta1: >12}{beta2: >12}{beta3: >12}    IONOSPHERIC CORR \n")
         # TODO do we need this? self.navigation_file.write(f"GPUT -2.7939677238E-09-5.329070518E-15 405504 2294          TIME SYSTEM CORR    ")
         # TODO do we need this? self.navigation_file.write(f"    {leap_seconds: <18}                                     LEAP SECONDS        \n")
         self.navigation_file.write(f"                                                            END OF HEADER       \n")
@@ -72,41 +85,41 @@ class RinexGenerator:
         """
         Separated into a function mostly for testing
         """
-        def format_rinex_float(value: np.float64) -> str:
+        def format(value: np.float64) -> str:
             return f"{value:+1.12e}"
 
         satellite_system = gps_parameters.satellite_system
         prn = gps_parameters.prn_number
         epoch = gps_parameters.epoch.strftime("%Y %m %d %H %M %S")
-        sv_clock_bias = format_rinex_float(gps_parameters.sv_clock_bias)
-        sv_clock_drift = format_rinex_float(gps_parameters.sv_clock_drift)
-        sv_clock_drift_rate = format_rinex_float(gps_parameters.sv_clock_drift_rate)
-        iode = format_rinex_float(gps_parameters.issue_of_data_ephemeris)
-        crs = format_rinex_float(gps_parameters.amplitude_sine_harmonic_correction_term_to_orbit_radius)
-        delta_n = format_rinex_float(gps_parameters.mean_motion_difference_from_computed_value)
-        m0 = format_rinex_float(gps_parameters.mean_anomaly_at_reference_time)
-        cuc = format_rinex_float(gps_parameters.amplitude_of_cosine_harmonic_correction_term_to_argument_of_latitude)
-        e = format_rinex_float(gps_parameters.eccentricity)
-        cus = format_rinex_float(gps_parameters.amplitude_of_sine_harmonic_correction_term_to_argument_of_latitude)
-        sqrt_a = format_rinex_float(gps_parameters.square_root_of_semi_major_axis)
-        toe = format_rinex_float(gps_parameters.time_of_ephemeris)
-        cic = format_rinex_float(gps_parameters.amplitude_of_cosine_harmonic_correction_term_to_angle_of_inclination)
-        omega0 = format_rinex_float(gps_parameters.longitude_of_ascending_node_of_orbit_plane_at_weekly_epoch)
-        cis = format_rinex_float(gps_parameters.amplitude_of_sine_harmonic_correction_term_to_angle_of_inclination)
-        i0 = format_rinex_float(gps_parameters.inclination_angle_at_reference_time)
-        crc = format_rinex_float(gps_parameters.amplitude_of_cosine_harmonic_correction_term_to_orbit_radius)
-        omega = format_rinex_float(gps_parameters.argument_of_perigee)
-        omega_dot = format_rinex_float(gps_parameters.rate_of_right_ascension)
-        idot = format_rinex_float(gps_parameters.rate_of_inclination_angle)
-        codes_on_l2 = format_rinex_float(gps_parameters.codes_on_l2_channel)
-        gps_week_number = format_rinex_float(gps_parameters.gps_week_number)
-        l2_p_flag = format_rinex_float(gps_parameters.l2_p_data_flag)
-        sv_accuracy = format_rinex_float(gps_parameters.sv_accuracy)
-        sv_health = format_rinex_float(gps_parameters.sv_health)
-        tgd = format_rinex_float(gps_parameters.tgd_total_group_delay)
-        iodc = format_rinex_float(gps_parameters.iodc_issue_of_data_clock)
-        transmission_time = format_rinex_float(gps_parameters.transmission_time_of_message)
-        fit_interval = format_rinex_float(gps_parameters.fit_interval_in_hours)
+        sv_clock_bias = format(gps_parameters.sv_clock_bias)
+        sv_clock_drift = format(gps_parameters.sv_clock_drift)
+        sv_clock_drift_rate = format(gps_parameters.sv_clock_drift_rate)
+        iode = format(gps_parameters.issue_of_data_ephemeris)
+        crs = format(gps_parameters.amplitude_sine_harmonic_correction_term_to_orbit_radius)
+        delta_n = format(gps_parameters.mean_motion_difference_from_computed_value)
+        m0 = format(gps_parameters.mean_anomaly_at_reference_time)
+        cuc = format(gps_parameters.amplitude_of_cosine_harmonic_correction_term_to_argument_of_latitude)
+        e = format(gps_parameters.eccentricity)
+        cus = format(gps_parameters.amplitude_of_sine_harmonic_correction_term_to_argument_of_latitude)
+        sqrt_a = format(gps_parameters.square_root_of_semi_major_axis)
+        toe = format(gps_parameters.time_of_ephemeris)
+        cic = format(gps_parameters.amplitude_of_cosine_harmonic_correction_term_to_angle_of_inclination)
+        omega0 = format(gps_parameters.longitude_of_ascending_node_of_orbit_plane_at_weekly_epoch)
+        cis = format(gps_parameters.amplitude_of_sine_harmonic_correction_term_to_angle_of_inclination)
+        i0 = format(gps_parameters.inclination_angle_at_reference_time)
+        crc = format(gps_parameters.amplitude_of_cosine_harmonic_correction_term_to_orbit_radius)
+        omega = format(gps_parameters.argument_of_perigee)
+        omega_dot = format(gps_parameters.rate_of_right_ascension)
+        idot = format(gps_parameters.rate_of_inclination_angle)
+        codes_on_l2 = format(gps_parameters.codes_on_l2_channel)
+        gps_week_number = format(gps_parameters.gps_week_number)
+        l2_p_flag = format(gps_parameters.l2_p_data_flag)
+        sv_accuracy = format(gps_parameters.sv_accuracy)
+        sv_health = format(gps_parameters.sv_health)
+        tgd = format(gps_parameters.tgd_total_group_delay)
+        iodc = format(gps_parameters.iodc_issue_of_data_clock)
+        transmission_time = format(gps_parameters.transmission_time_of_message)
+        fit_interval = format(gps_parameters.fit_interval_in_hours)
 
         return (
             f"{satellite_system}{prn:>2} {epoch}{sv_clock_bias}{sv_clock_drift}{sv_clock_drift_rate}\n"

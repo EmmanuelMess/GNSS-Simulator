@@ -75,6 +75,7 @@ class GnssSensor:
         print(f"Estimated receiver clock drift {clock_drift_approximation}s")
         print(f"Error {np.linalg.norm(velocity_approximation-player_velocity)}m/s, real velocity {player_velocity}m/s, linear_velocity {np.linalg.norm(player_velocity)}m/s")
 
+        # TODO the time_gps should be biased by the receiver clock
         self.rinex_generator.add_position(time_gps, list(visible_satellites_prn), list(pseudoranges), list(direct_doppler))
 
         return position_aproximation, velocity_approximation, clock_bias_approximation, clock_drift_approximation
