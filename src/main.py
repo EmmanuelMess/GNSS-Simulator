@@ -23,13 +23,23 @@ SIMULATION_DUMG = {
     "start_time": "2025-01-01T09:00:00.000",
     "receiver_position_start": llh2ecef(np.array([np.deg2rad(-66.665169), np.deg2rad(140.002200), -3.38], dtype=np.float64)),
     "satellite_filenames": ["dumg/03.orbit", "dumg/04.orbit", "dumg/06.orbit", "dumg/09.orbit", "dumg/11.orbit",
-                            "dumg/26.orbit", "dumg/28.orbit", "dumg/31.orbit"]
+                            "dumg/26.orbit", "dumg/28.orbit", "dumg/31.orbit"],
+    "ionospheric_model": (
+        np.array([0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6], dtype=np.float64),
+        np.array([0.7782 * 1e5, 0.3277 * 1e5, -0.6554 * 1e5, -0.1966 * 1e6], dtype=np.float64)
+    ),
+    "jammer_noise": np.float64(0.0) # dB
 }
 SIMULATION_0LAT0LON = {
     "start_time": "2025-05-01T09:00:00.000",
     "receiver_position_start": llh2ecef(np.array([np.deg2rad(0.0), np.deg2rad(0.0), 0.0], dtype=np.float64)),
     "satellite_filenames": ["invented-0lat-0lon/01.orbit", "invented-0lat-0lon/02.orbit", "invented-0lat-0lon/03.orbit",
                        "invented-0lat-0lon/04.orbit", "invented-0lat-0lon/05.orbit", "invented-0lat-0lon/06.orbit"],
+    "ionospheric_model": (
+        np.array([0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6], dtype=np.float64),
+        np.array([0.7782 * 1e5, 0.3277 * 1e5, -0.6554 * 1e5, -0.1966 * 1e6], dtype=np.float64)
+    ),
+    "jammer_noise": np.float64(0.0) # dB
 }
 
 PIXELS_TO_METERS = 1/10
@@ -42,9 +52,6 @@ CUTOFF_ELEVATION = np.deg2rad(10)
 
 SATELLITE_NUMBER = 6
 
-SATELLITE_ALPHAS = np.array([0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6], dtype=np.float64)
-SATELLITE_BETAS = np.array([0.7782 * 1e5, 0.3277 * 1e5, -0.6554 * 1e5, -0.1966 * 1e6], dtype=np.float64)
-
 RECEIVER_CLOCK_BIAS = np.float64(1 * 1e-3)
 # Walk of 0.1us per second
 # From https://www.e-education.psu.edu/geog862/node/1716
@@ -54,8 +61,6 @@ SATELLITE_NOISE_STD = np.float64(0.0)
 
 # This is the angle at which satellites start not being affected by troposferic effects
 TROPOSPHERIC_CUTOFF_ANGLE = np.deg2rad(5)
-
-JAMMER_NOISE = np.float64(0) # 30 # dB
 
 # This noise level does not affect the reciever, because it can correct for the noise
 NOISE_CORRECTION_LEVEL = np.float64(7) # dB
@@ -94,6 +99,7 @@ def main():
     e_axis, n_axis, u_axis = pos2enu_base(ecef2llh(start_receiver_position))
     s_axis = -n_axis # HACK because y axis is inverted
     gps_start_time = time2gps(start_time)
+    ionospheric_alphas, ionospheric_betas = simulation_data["ionospheric_model"]
     satellite_orbits: List[GpsSatellite] = []
 
     # Get satellites, filter by availability
@@ -122,11 +128,12 @@ def main():
     print(f"Seconds of week to first epoch {time_gps2seconds_of_week(gps_start_time.gps)}")
 
     rinex_generator = create_rinex_generator(start_receiver_position, cut_satellite_orbits, start_time, gps_start_time,
-                                             SATELLITE_ALPHAS, SATELLITE_BETAS)
+                                             ionospheric_alphas, ionospheric_betas)
     # Position simulation components
-    simulator = AntennaSimulator(rng, SATELLITE_NUMBER, satellite_clock_bias, GNSS_SIGNAL_FREQUENCY, SATELLITE_ALPHAS,
-                                 SATELLITE_BETAS, JAMMER_NOISE, NOISE_CORRECTION_LEVEL, NOISE_FIX_LOSS_LEVEL,
-                                 NOISE_EFFECT_RATE, SATELLITE_NOISE_STD, TROPOSPHERIC_CUTOFF_ANGLE)
+    simulator = AntennaSimulator(rng, SATELLITE_NUMBER, satellite_clock_bias, GNSS_SIGNAL_FREQUENCY, ionospheric_alphas,
+                                 ionospheric_betas, simulation_data["jammer_noise"], NOISE_CORRECTION_LEVEL,
+                                 NOISE_FIX_LOSS_LEVEL, NOISE_EFFECT_RATE, SATELLITE_NOISE_STD,
+                                 TROPOSPHERIC_CUTOFF_ANGLE)
     solver = Solver(SATELLITE_NUMBER, satellite_clock_bias, GNSS_SIGNAL_FREQUENCY)
     sensor = GnssSensor(simulator, solver, rinex_generator, np.array(satellite_prns, dtype=np.int64), CUTOFF_ELEVATION)
 
