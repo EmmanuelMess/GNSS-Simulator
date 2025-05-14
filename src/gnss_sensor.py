@@ -23,8 +23,8 @@ class GnssSensor:
                reciever_clock_bias, reciever_clock_drift, time_gps: Time, time_utc: Time)\
             -> Tuple[array3d, array3d, np.float64, np.float64]:
         print("===")
-        print(f"GPS time: {time_gps.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"UTC time: {time_utc.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"GPS time: {time_gps.strftime('%Y-%m-%d %H:%M:%S.%f')}")
+        print(f"UTC time: {time_utc.strftime('%Y-%m-%d %H:%M:%S.%f')}")
         print(f"Satelite positions: {satellite_positions_ecef}")
         print(f"Satelite velocities: {satellite_velocities_ecef}")
 

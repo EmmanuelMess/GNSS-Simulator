@@ -177,7 +177,7 @@ class AntennaSimulator:
 
 
     def get_pseudoranges(self, satellite_positions_ecef, player_position_ecef, reciever_clock_bias,
-                         time_of_week_gps_seconds):
+                         time_of_week_gps_seconds: np.float64):
         ionospheric_delay = self._ionospheric_delay_calculation(satellite_positions_ecef, player_position_ecef,
                                                                 time_of_week_gps_seconds)
 
