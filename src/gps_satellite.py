@@ -90,7 +90,7 @@ class GpsSatellite:
         # eccentric_anomaly_rate
         e_dot_k = n / (1.0 - e * np.cos(e_k))
         # true_anomaly_rate
-        v_dot_k = e_dot_k * (np.sqrt(1.0 - e ** 2) / (1.0 - e * np.cos(e_dot_k)))
+        v_dot_k = e_dot_k * (np.sqrt(1.0 - e ** 2) / (1.0 - e * np.cos(e_k)))
 
         # corrected_inclination_angle_rate
         di_k_dt = idot + 2.0 * v_dot_k * (c_is * np.cos(phi_k_2)- c_ic * np.sin(phi_k_2))
@@ -109,18 +109,18 @@ class GpsSatellite:
         x_velocity = (
             - plane_x * omega_dot_k * np.sin(omega_k)
             + x_dot_prime * np.cos(omega_k)
-            - y_dot_prime * np.sin(omega_k) * np.cos(delta_i_k)
-            - plane_y * (omega_dot_k * np.cos(omega_dot_k) * np.cos(delta_i_k)
-                        - di_k_dt * np.sin(omega_dot_k) * np.sin(delta_i_k))
+            - y_dot_prime * np.sin(omega_k) * np.cos(i_k)
+            - plane_y * (omega_dot_k * np.cos(omega_k) * np.cos(i_k)
+                        - di_k_dt * np.sin(omega_k) * np.sin(i_k))
         )
         y_velocity = (
             plane_x * omega_dot_k * np.cos(omega_k)
             + x_dot_prime * np.sin(omega_k)
-            + y_dot_prime * np.cos(omega_k) * np.cos(delta_i_k)
-            - plane_y * (omega_dot_k * np.sin(omega_dot_k) * np.cos(delta_i_k)
-                        + di_k_dt * np.cos(omega_dot_k) * np.sin(delta_i_k))
+            + y_dot_prime * np.cos(omega_k) * np.cos(i_k)
+            - plane_y * (omega_dot_k * np.sin(omega_k) * np.cos(i_k)
+                        + di_k_dt * np.cos(omega_k) * np.sin(i_k))
         )
-        z_velocity = y_dot_prime * np.sin(delta_i_k) + plane_y * di_k_dt * np.cos(delta_i_k)
+        z_velocity = y_dot_prime * np.sin(i_k) + plane_y * di_k_dt * np.cos(i_k)
 
         velocity = np.array([x_velocity, y_velocity, z_velocity], dtype=np.float64)
 

@@ -7,10 +7,11 @@ from src import gps_orbital_parameters
 from src.conversions import time2gps
 from src.gps_orbital_parameters import GpsOrbitalParameters
 from src.gps_satellite import GpsSatellite
+from tests.constants import DISTANCE_PRECISION
 
 
 class GpsOrbitTest(unittest.TestCase):
-    def test_crude(self):
+    def test_crude_0(self):
         inclination: np.float64 = np.float64(0.958_138_635_455)
         longitude_of_ascending_node: np.float64 = np.float64(0.635_682_074_832)
         eccentricity: np.float64 = np.float64(0.003_710_3)
@@ -64,6 +65,29 @@ class GpsOrbitTest(unittest.TestCase):
         self.assertAlmostEqual(position[1], np.float64(-40_481_865.45), delta=0.1)
         self.assertAlmostEqual(position[2], np.float64(-1_945_051.56), delta=0.1)
         # Velocity makes no sense for this example
+
+    def test_crude_1(self):
+        satellite_parameters = gps_orbital_parameters.from_rinex("""\
+G01 2025 05 01 09 00 37 0.000000000000E+00 0.000000000000E+00 0.000000000000E+00
+     0.000000000000E+00 0.000000000000E+00 0.000000000000E+00-2.984513282776E+00
+     0.000000000000E+00 0.000000000000E+00 0.000000000000E+00 5.153554199219E+03
+     3.780180000000E+05 0.000000000000E+00 0.000000000000E+00 0.000000000000E+00
+     9.890951514244E-01 0.000000000000E+00-6.486032009125E-01 0.000000000000E+00
+     0.000000000000E+00 0.000000000000E+00 2.364000000000E+03 0.000000000000E+00
+     2.000000000000E+00 0.000000000000E+00 0.000000000000E+00 0.000000000000E+00
+     0.000000000000E+00 4.000000000000E+00\
+        """)
+        satellite = GpsSatellite(satellite_parameters)
+        # 2025-05-01T09:00:00.000 UTC
+        calculated_position_time = time2gps(Time(1430125218.0, format="gps"))
+        (position, velocity) = satellite.position_velocity(calculated_position_time)
+        # Calculated with RTKLIB
+        self.assertAlmostEqual(position[0], np.float64(22_258_163.145151), delta=DISTANCE_PRECISION)
+        self.assertAlmostEqual(position[1], np.float64(10_013_391.805292), delta=DISTANCE_PRECISION)
+        self.assertAlmostEqual(position[2], np.float64(10_473_445.474330), delta=DISTANCE_PRECISION)
+        self.assertAlmostEqual(velocity[0], np.float64(896.647751), delta=DISTANCE_PRECISION)
+        self.assertAlmostEqual(velocity[1], np.float64(991.665488), delta=DISTANCE_PRECISION)
+        self.assertAlmostEqual(velocity[2], np.float64(-2_853.661865), delta=DISTANCE_PRECISION)
 
     def test_precise_0(self):
         # Data from COD0MGXFIN_20251000000_01D_05M_ORB.SP3 and CORD00ARG_R_20251000000_01D_GN.rnx
