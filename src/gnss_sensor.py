@@ -50,7 +50,7 @@ class GnssSensor:
         # Assume satellite position is known because ephimeris is transmitted during the first fix
         # From https://gssc.esa.int/navipedia/index.php/Coordinates_Computation_from_Almanac_Data
         position_aproximation, clock_bias_approximation, gnss_position_error = (
-            self.solver.solve_position(visible_satellite_positions_ecef, pseudoranges, 1e-9))
+            self.solver.solve_position(visible_satellite_positions_ecef, pseudoranges, 1e-4))
 
         Q, gdop, hdop, vdop, pdop = self.simulator.get_dilution_of_presition(visible_satellite_positions_ecef, player_position)
 
