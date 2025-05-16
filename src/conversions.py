@@ -134,6 +134,7 @@ def time2gps(time: Time) -> Time:
     This is a hack because astropy doesn't have the needed GPS time scale that start from 1980 and only takes into
     account future leap seconds.
     See https://github.com/astropy/astropy/issues/11265
+    TODO replace this horror with a specific type
     """
     AMOUNT_OF_LEAP_SECONDS_AT_GPS_EPOCH = 19
     gps_time = time.tai + TimeDelta(-AMOUNT_OF_LEAP_SECONDS_AT_GPS_EPOCH * u.s)
@@ -141,15 +142,13 @@ def time2gps(time: Time) -> Time:
     return gps_time
 
 
-def gps_seconds_wrap(seconds_of_week: int) -> int:
+def gps_seconds_wrap(seconds_of_week: np.float64) -> np.float64:
     """
     Wrap the seconds of week into the last of next week
     """
-    seconds_per_week = 7 * 24 * 60 * 60
-
-    if seconds_of_week > seconds_per_week / 2:
-        return seconds_of_week - seconds_per_week
-    elif seconds_of_week < -seconds_per_week / 2:
-        return seconds_of_week + seconds_per_week
+    if seconds_of_week > SECONDS_IN_WEEK / 2:
+        return seconds_of_week - SECONDS_IN_WEEK
+    elif seconds_of_week < -SECONDS_IN_WEEK / 2:
+        return seconds_of_week + SECONDS_IN_WEEK
     else:
         return seconds_of_week

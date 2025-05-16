@@ -44,7 +44,7 @@ class GpsOrbitalParameters:
     fit_interval_in_hours: np.float64
 
 RINEX_START = "(?P<system>[A-Z])(?P<sv>[ \d]{2}) (?P<year>\d{4}) (?P<month>\d{2}) (?P<day>\d{2}) (?P<hour>\d{2}) (?P<minute>\d{2}) (?P<second>\d{2})"
-RINEX_DOUBLE_REGEX = "[\-\+ ]\d?.\d{12}[EeDd][\-\+]\d{2}"
+RINEX_DOUBLE_REGEX = "[ \d.\-\+EeDd]{19}"
 RINEX_LINE_JUMP = "\n *"
 RINEX_REGEX = re.compile(f"^{RINEX_START}(?P<clock_bias>{RINEX_DOUBLE_REGEX})(?P<clock_drift>{RINEX_DOUBLE_REGEX})(?P<clock_drift_rate>{RINEX_DOUBLE_REGEX}){RINEX_LINE_JUMP}(?P<iode>{RINEX_DOUBLE_REGEX})(?P<crs>{RINEX_DOUBLE_REGEX})(?P<delta_n>{RINEX_DOUBLE_REGEX})(?P<m0>{RINEX_DOUBLE_REGEX}){RINEX_LINE_JUMP}(?P<cuc>{RINEX_DOUBLE_REGEX})(?P<e>{RINEX_DOUBLE_REGEX})(?P<cus>{RINEX_DOUBLE_REGEX})(?P<sqrt_a>{RINEX_DOUBLE_REGEX}){RINEX_LINE_JUMP}(?P<toe>{RINEX_DOUBLE_REGEX})(?P<cic>{RINEX_DOUBLE_REGEX})(?P<omega0>{RINEX_DOUBLE_REGEX})(?P<cis>{RINEX_DOUBLE_REGEX}){RINEX_LINE_JUMP}(?P<i0>{RINEX_DOUBLE_REGEX})(?P<crc>{RINEX_DOUBLE_REGEX})(?P<omega>{RINEX_DOUBLE_REGEX})(?P<omega_dot>{RINEX_DOUBLE_REGEX}){RINEX_LINE_JUMP}(?P<idot>{RINEX_DOUBLE_REGEX})(?P<codes_l2>{RINEX_DOUBLE_REGEX})(?P<gps_week>{RINEX_DOUBLE_REGEX})(?P<l2_data>{RINEX_DOUBLE_REGEX}){RINEX_LINE_JUMP}(?P<accuracy>{RINEX_DOUBLE_REGEX})(?P<health>{RINEX_DOUBLE_REGEX})(?P<tgd>{RINEX_DOUBLE_REGEX})(?P<iodc>{RINEX_DOUBLE_REGEX}){RINEX_LINE_JUMP}(?P<transmission_time>{RINEX_DOUBLE_REGEX})(?P<fit_interval>{RINEX_DOUBLE_REGEX})", re.MULTILINE)
 
@@ -54,11 +54,9 @@ def from_rinex(string: str) -> GpsOrbitalParameters:
     WARNING: this function is not a full parser, and has not been extensively tested. User is expected to ensure that
     the parameters were read correctly.
     """
-
-    # TODO use columns instead of format
     def convert_float(text: str) -> np.float64:
         text = text.replace("D", "E")
-        text = text.replace("d", "e")
+        text = text.replace("d", "E")
 
         return np.float64(text)
 

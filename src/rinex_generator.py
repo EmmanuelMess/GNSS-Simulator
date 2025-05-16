@@ -33,7 +33,7 @@ class RinexGenerator:
     def _write_header_navigation_file(self, utc_start: Time, satellite_alphas: np.ndarray[4, np.float64],
                                       satellite_betas: np.ndarray[4, np.float64]):
         def format(value: np.float64) -> str:
-            return f"{value:+1.3e}"
+            return f"{value:+1.4E}"
 
         time = utc_start.strftime('%Y%m%d %H%M%S')
 
@@ -46,8 +46,8 @@ class RinexGenerator:
 
         self.navigation_file.write(f"     3.03           N: GNSS NAV DATA    G: GPS              RINEX VERSION / TYPE\n")
         self.navigation_file.write(f"GnssSim CIFASIS                         {time: >15} UTC PGM / RUN BY / DATE \n")
-        self.navigation_file.write(f"GPSA    {alpha0: >12}{alpha1: >12}{alpha2: >12}{alpha3: >12}    IONOSPHERIC CORR \n")
-        self.navigation_file.write(f"GPSB    {beta0: >12}{beta1: >12}{beta2: >12}{beta3: >12}    IONOSPHERIC CORR \n")
+        self.navigation_file.write(f"GPSA {alpha0: >12}{alpha1: >12}{alpha2: >12}{alpha3: >12}       IONOSPHERIC CORR    \n")
+        self.navigation_file.write(f"GPSB {beta0: >12}{beta1: >12}{beta2: >12}{beta3: >12}       IONOSPHERIC CORR    \n")
         # TODO do we need this? self.navigation_file.write(f"GPUT -2.7939677238E-09-5.329070518E-15 405504 2294          TIME SYSTEM CORR    ")
         # TODO do we need this? self.navigation_file.write(f"    {leap_seconds: <18}                                     LEAP SECONDS        \n")
         self.navigation_file.write(f"                                                            END OF HEADER       \n")
@@ -85,7 +85,7 @@ class RinexGenerator:
         Separated into a function mostly for testing
         """
         def format(value: np.float64) -> str:
-            return f"{value:+1.12e}"
+            return f"{value:+1.12E}"
 
         satellite_system = gps_parameters.satellite_system
         prn = gps_parameters.prn_number

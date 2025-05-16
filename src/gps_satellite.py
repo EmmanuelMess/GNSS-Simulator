@@ -16,6 +16,8 @@ class GpsSatellite:
             print(f"WARNING: drift and drift rate parameters are not 0 for satellite {orbit_parameters.prn_number} but clock drift will NOT be modeled!")
 
     def position_velocity(self, gps_time: Time) -> Tuple[array3d, array3d]:
+        # From IS-GPS-200M table 20-IV
+
         # Gravitational effect of the Earth
         mu = np.float64(3.986005e14)
         # Rate of rotation of the Earth
@@ -44,6 +46,7 @@ class GpsSatellite:
         n_0 = np.sqrt(mu / a ** 3)
         # TODO add the satellite bias to the time calculation
         t_oe = time_gps2seconds_of_week(self.orbit_parameters.epoch.gps) + 19 # HACK 19s because astropy has issues
+        # TODO add the receiver bias to the time calculation
         t = time_gps2seconds_of_week(gps_time.gps) + 19 # HACK 19s because astropy has issues
         tk = gps_seconds_wrap(t - t_oe)
         # Corrected mean motion

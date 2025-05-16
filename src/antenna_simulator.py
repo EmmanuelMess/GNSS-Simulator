@@ -179,6 +179,8 @@ class AntennaSimulator:
 
     def get_pseudoranges(self, satellite_positions_ecef, player_position_ecef, reciever_clock_bias,
                          time_of_week_gps_seconds: np.float64):
+
+        # TODO compute the receiver clock time
         ionospheric_delay = self._ionospheric_delay_calculation(satellite_positions_ecef, player_position_ecef,
                                                                 time_of_week_gps_seconds)
 
@@ -235,6 +237,8 @@ class AntennaSimulator:
         return direct_doppler
 
     def get_dilution_of_presition(self, satellite_positions_ecef,  player_position):
+        # TODO add tropospheric and ionospheric factors, as well as signal noise
+
         A = np.concatenate(
             (
                 (satellite_positions_ecef - player_position) / np.linalg.norm(satellite_positions_ecef - player_position,
