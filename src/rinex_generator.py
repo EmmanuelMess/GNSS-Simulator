@@ -89,7 +89,7 @@ class RinexGenerator:
 
         satellite_system = gps_parameters.satellite_system
         prn = gps_parameters.prn_number
-        epoch = gps_parameters.epoch.strftime("%Y %m %d %H %M %S")
+        epoch = gps_parameters.time_of_ephemeris.strftime("%Y %m %d %H %M %S")
         sv_clock_bias = format(gps_parameters.sv_clock_bias)
         sv_clock_drift = format(gps_parameters.sv_clock_drift)
         sv_clock_drift_rate = format(gps_parameters.sv_clock_drift_rate)
@@ -101,7 +101,7 @@ class RinexGenerator:
         e = format(gps_parameters.eccentricity)
         cus = format(gps_parameters.amplitude_of_sine_harmonic_correction_term_to_argument_of_latitude)
         sqrt_a = format(gps_parameters.square_root_of_semi_major_axis)
-        toe = format(gps_parameters.time_of_ephemeris)
+        toe = format(gps_parameters.time_of_ephemeris_seconds_of_week)
         cic = format(gps_parameters.amplitude_of_cosine_harmonic_correction_term_to_angle_of_inclination)
         omega0 = format(gps_parameters.longitude_of_ascending_node_of_orbit_plane_at_weekly_epoch)
         cis = format(gps_parameters.amplitude_of_sine_harmonic_correction_term_to_angle_of_inclination)
@@ -111,7 +111,7 @@ class RinexGenerator:
         omega_dot = format(gps_parameters.rate_of_right_ascension)
         idot = format(gps_parameters.rate_of_inclination_angle)
         codes_on_l2 = format(gps_parameters.codes_on_l2_channel)
-        gps_week_number = format(gps_parameters.gps_week_number)
+        gps_week_number = format(gps_parameters.time_of_ephemeris_week_number)
         l2_p_flag = format(gps_parameters.l2_p_data_flag)
         sv_accuracy = format(gps_parameters.sv_accuracy)
         sv_health = format(gps_parameters.sv_health)

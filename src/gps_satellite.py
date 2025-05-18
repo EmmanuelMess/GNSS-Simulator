@@ -45,7 +45,7 @@ class GpsSatellite:
         # Mean motion
         n_0 = np.sqrt(mu / a ** 3)
         # TODO add the satellite bias to the time calculation
-        t_oe = time_gps2seconds_of_week(self.orbit_parameters.epoch.gps) + 19 # HACK 19s because astropy has issues
+        t_oe = time_gps2seconds_of_week(self.orbit_parameters.time_of_ephemeris.gps) + 19 # HACK 19s because astropy has issues
         # TODO add the receiver bias to the time calculation
         t = time_gps2seconds_of_week(gps_time.gps) + 19 # HACK 19s because astropy has issues
         tk = gps_seconds_wrap(t - t_oe)

@@ -121,7 +121,7 @@ def main():
     print(satellite_prns)
     print(f"Sim start time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Reveiver start position {start_receiver_position}, enu {e_axis} {n_axis} {u_axis}")
-    print(f"Satellite epochs: {[satellite.parameters().epoch.strftime('%Y-%m-%d %H:%M:%S') for satellite in cut_satellite_orbits]}")
+    print(f"Satellite epochs: {[satellite.parameters().time_of_ephemeris.strftime('%Y-%m-%d %H:%M:%S') for satellite in cut_satellite_orbits]}")
     print(f"Satellite positions: {[np.round(np.rad2deg(ecef2llh(satellite.position_velocity(gps_start_time)[0]))) for satellite in cut_satellite_orbits]}")
     print(f"Satellite velocities: {[satellite.position_velocity(gps_start_time)[1] for satellite in cut_satellite_orbits]}")
     print(f"Satelite clock biases: {satellite_clock_bias}")

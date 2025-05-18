@@ -13,6 +13,7 @@ class GpsOrbitalParameters:
     satellite_system: str
     prn_number: int
     epoch: Time
+    time_of_ephemeris: Time
     sv_clock_bias: np.float64
     sv_clock_drift: np.float64
     sv_clock_drift_rate: np.float64
@@ -24,7 +25,7 @@ class GpsOrbitalParameters:
     eccentricity: np.float64
     amplitude_of_sine_harmonic_correction_term_to_argument_of_latitude: np.float64
     square_root_of_semi_major_axis: np.float64
-    time_of_ephemeris: np.float64
+    time_of_ephemeris_seconds_of_week: np.float64
     amplitude_of_cosine_harmonic_correction_term_to_angle_of_inclination: np.float64
     longitude_of_ascending_node_of_orbit_plane_at_weekly_epoch: np.float64
     amplitude_of_sine_harmonic_correction_term_to_angle_of_inclination: np.float64
@@ -34,7 +35,7 @@ class GpsOrbitalParameters:
     rate_of_right_ascension: np.float64
     rate_of_inclination_angle: np.float64
     codes_on_l2_channel: np.float64
-    gps_week_number: np.float64
+    time_of_ephemeris_week_number: np.float64
     l2_p_data_flag: np.float64
     sv_accuracy: np.float64
     sv_health: np.float64
@@ -62,16 +63,27 @@ def from_rinex(string: str) -> GpsOrbitalParameters:
 
     matches = re.match(RINEX_REGEX, string)
 
+    epoch_year = np.uint64(matches.group("year"))
+    epoch_month = np.uint64(matches.group("month"))
+    epoch_day = np.uint64(matches.group("day"))
+    epoch_hour = np.uint64(matches.group("hour"))
+    epoch_minute = np.uint64(matches.group("minute"))
+    epoch_second = np.uint64(matches.group("second"))
+    # HACK read the time2gps docs
+    epoch = time2gps(Time(epoch_year * u.year + epoch_month * u.month + epoch_day * u.day
+                                      + epoch_hour * u.hour + epoch_minute * u.minute + epoch_second * u.s, format='gps'))
+
     week_of_year = convert_float(matches.group("gps_week"))
     toe = convert_float(matches.group("toe"))
 
     # HACK read the time2gps docs
-    epoch = time2gps(Time(week_of_year * u.week + toe * u.s, format='gps'))
+    time_of_ephemeris = time2gps(Time(week_of_year * u.week + toe * u.s, format='gps'))
 
     parameters = GpsOrbitalParameters(
         satellite_system = matches.group("system"),
         prn_number = np.int64(matches.group("sv")).item(),
         epoch=epoch,
+        time_of_ephemeris=time_of_ephemeris,
         sv_clock_bias = convert_float(matches.group("clock_bias")),
         sv_clock_drift = convert_float(matches.group("clock_drift")),
         sv_clock_drift_rate = convert_float(matches.group("clock_drift_rate")),
@@ -83,7 +95,7 @@ def from_rinex(string: str) -> GpsOrbitalParameters:
         eccentricity = convert_float(matches.group("e")),
         amplitude_of_sine_harmonic_correction_term_to_argument_of_latitude = convert_float(matches.group("cus")),
         square_root_of_semi_major_axis = convert_float(matches.group("sqrt_a")),
-        time_of_ephemeris = toe,
+        time_of_ephemeris_seconds_of_week= toe,
         amplitude_of_cosine_harmonic_correction_term_to_angle_of_inclination = convert_float(matches.group("cic")),
         longitude_of_ascending_node_of_orbit_plane_at_weekly_epoch = convert_float(matches.group("omega0")),
         amplitude_of_sine_harmonic_correction_term_to_angle_of_inclination = convert_float(matches.group("cis")),
@@ -93,7 +105,7 @@ def from_rinex(string: str) -> GpsOrbitalParameters:
         rate_of_right_ascension = convert_float(matches.group("omega_dot")),
         rate_of_inclination_angle = convert_float(matches.group("idot")),
         codes_on_l2_channel = convert_float(matches.group("codes_l2")),
-        gps_week_number = week_of_year,
+        time_of_ephemeris_week_number= week_of_year,
         l2_p_data_flag = convert_float(matches.group("l2_data")),
         sv_accuracy = convert_float(matches.group("accuracy")),
         sv_health = convert_float(matches.group("health")),

@@ -19,12 +19,14 @@ class GpsOrbitTest(unittest.TestCase):
         mean_anomaly: np.float64 = np.float64(2.367_757_296_49)
         sqrt_semi_major_axis: np.float64 = np.float64(6_499.315_173_94)
 
-        epoch = time2gps(Time("2025-04-19 09:46:50.000", format="iso"))
+        epoch = time2gps(Time("2025-04-19 10:00:00", format="iso"))
+        time_of_ephemeris = time2gps(Time("2025-04-19 09:46:50.000", format="iso"))
 
         satellite_parameters = GpsOrbitalParameters(
             satellite_system="G",
             prn_number=0,
             epoch=epoch,
+            time_of_ephemeris=time_of_ephemeris,
             sv_clock_bias=np.float64(0.0),
             sv_clock_drift=np.float64(0.0),
             sv_clock_drift_rate=np.float64(0.0),
@@ -36,7 +38,7 @@ class GpsOrbitTest(unittest.TestCase):
             eccentricity=eccentricity,
             amplitude_of_sine_harmonic_correction_term_to_argument_of_latitude=np.float64(0.0),
             square_root_of_semi_major_axis=sqrt_semi_major_axis,
-            time_of_ephemeris=np.float64(0.0),
+            time_of_ephemeris_seconds_of_week=np.float64(0.0),
             amplitude_of_cosine_harmonic_correction_term_to_angle_of_inclination=np.float64(0.0),
             longitude_of_ascending_node_of_orbit_plane_at_weekly_epoch=longitude_of_ascending_node,
             amplitude_of_sine_harmonic_correction_term_to_angle_of_inclination=np.float64(0.0),
@@ -46,7 +48,7 @@ class GpsOrbitTest(unittest.TestCase):
             rate_of_right_ascension=np.float64(0.0),
             rate_of_inclination_angle=np.float64(0.0),
             codes_on_l2_channel=np.float64(0.0),
-            gps_week_number=np.float64(0.0),
+            time_of_ephemeris_week_number=np.float64(0.0),
             l2_p_data_flag=np.float64(0.0),
             sv_accuracy=np.float64(0.0),
             sv_health=np.float64(0.0),
