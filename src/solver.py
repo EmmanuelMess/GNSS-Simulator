@@ -3,8 +3,7 @@ import scipy
 
 
 class Solver:
-    def __init__(self, satellite_amount, satellite_clock_bias, satellite_frequencies):
-        self.satellite_amount = satellite_amount
+    def __init__(self, satellite_clock_bias, satellite_frequencies):
         self.satellite_clock_bias = satellite_clock_bias
         self.satellite_frequencies = satellite_frequencies
 
@@ -16,6 +15,7 @@ class Solver:
         Numeric fixes from https://gssc.esa.int/navipedia/index.php?title=Code_Based_Positioning_(SPS)
         :return:
         """
+        satellite_amount = satellite_positions_ecef.shape[0]
         gnss_position_aproximation = np.array([1, 1, 1], dtype=np.float64)
         gnss_receiver_clock_bias_approximation = np.float64(1e-6) * scipy.constants.c
         gnss_position_error = np.inf
@@ -33,7 +33,7 @@ class Solver:
             delta_gnss_pseudorange = pseudorange.copy() - gnss_pseudorange_approximation
 
             delta_satelites = gnss_position_aproximation - satellite_positions_ecef
-            cs = np.ones((1, self.satellite_amount), dtype=np.float64)
+            cs = np.ones((1, satellite_amount), dtype=np.float64)
 
             G = np.concatenate((delta_satelites / gnss_pseudorange_approximation.reshape((-1, 1)), cs.T), axis=1)
 
@@ -58,6 +58,7 @@ class Solver:
         :return:
         """
         # TODO add satelite weighting
+        satellite_amount = satellite_positions_ecef.shape[0]
 
         def pseudoranges_approximation(gnss_position_aproximation, gnss_receiver_clock_bias_approximation):
             return (np.linalg.norm(satellite_positions_ecef - gnss_position_aproximation, axis=1)
@@ -74,7 +75,7 @@ class Solver:
             gnss_receiver_clock_bias_approximation = x[-1]
 
             delta_satelites = satellite_positions_ecef - gnss_position_aproximation
-            cs = np.ones((1, self.satellite_amount), dtype=np.float64) * -1
+            cs = np.ones((1, satellite_amount), dtype=np.float64) * -1
 
             approx = pseudoranges_approximation(gnss_position_aproximation, gnss_receiver_clock_bias_approximation)
 
@@ -96,6 +97,7 @@ class Solver:
         From Global Positioning System section 6.2.1, adapted from getGnssPositionTaylor
         """
         # TODO add satelite weighting
+        satellite_amount = satellite_positions_ecef.shape[0]
 
         pseudorange_rates = scipy.constants.c / self.satellite_frequencies * direct_doppler
 
@@ -117,7 +119,7 @@ class Solver:
 
             delta_gnss_pseudorange_rates = pseudorange_rates - pseudorange_rates_approximation
 
-            cs = np.ones((1, self.satellite_amount), dtype=np.float64)
+            cs = np.ones((1, satellite_amount), dtype=np.float64)
 
             G = np.concatenate((satellite_line_of_sight, cs.T), axis=1)
 

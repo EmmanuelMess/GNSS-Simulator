@@ -6,12 +6,11 @@ from src.constants import GPS_L1_FREQUENCY
 
 
 class AntennaSimulator:
-    def __init__(self, rng, satellite_amount, satellite_clock_bias, satellite_frequency,
+    def __init__(self, rng, satellite_clock_bias, satellite_frequency,
                  satellite_alphas: np.ndarray[4, np.float64], satellite_betas: np.ndarray[4, np.float64],
                  jammer_noise: np.float64, noise_correction_level, noise_fix_loss_level, noise_effect_rate,
                  satellite_noise_std, tropospheric_cutoff_angle):
         self.rng = rng
-        self.satellite_amount = satellite_amount
         self.satellite_clock_bias = satellite_clock_bias
         self.satellite_frequency = satellite_frequency # TODO make a vector
         self.satellite_alphas = satellite_alphas
@@ -180,6 +179,8 @@ class AntennaSimulator:
     def get_pseudoranges(self, satellite_positions_ecef, player_position_ecef, reciever_clock_bias,
                          time_of_week_gps_seconds: np.float64):
 
+        satellite_amount = satellite_positions_ecef.shape[0]
+
         # TODO compute the receiver clock time
         ionospheric_delay = self._ionospheric_delay_calculation(satellite_positions_ecef, player_position_ecef,
                                                                 time_of_week_gps_seconds)
@@ -197,7 +198,7 @@ class AntennaSimulator:
 
         # Satelite dependent random noise
         # From GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
-        epsilon = self.rng.normal(0.0, self.satellite_noise_std, (self.satellite_amount,))
+        epsilon = self.rng.normal(0.0, self.satellite_noise_std, (satellite_amount,))
 
         # Noise from sources local to the antenna, helps to model interference
         # Extrapolated from GNSS interference mitigation: A measurement and position domain assessment
@@ -222,13 +223,15 @@ class AntennaSimulator:
                     receiver_clock_drift):
         # Doppler effect simulation
         # From GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.2
+        satellite_amount = satellite_positions_ecef.shape[0]
+
         velocity_difference = player_velocity - satellite_velocities_ecef
         satellite_user_delta = satellite_positions_ecef - player_position
         satellite_line_of_sight = satellite_user_delta / np.linalg.norm(satellite_user_delta, axis=1).reshape((-1, 1))
         velocity_scalar_projection = np.sum(velocity_difference * satellite_line_of_sight, axis=1)
         velocity_base = velocity_scalar_projection * (self.satellite_frequency / scipy.constants.c)
         doppler_contribution_clock = receiver_clock_drift * (self.satellite_frequency / scipy.constants.c)
-        epsilon = self.rng.normal(0.0, self.satellite_noise_std, (self.satellite_amount,))
+        epsilon = self.rng.normal(0.0, self.satellite_noise_std, (satellite_amount,))
 
         # Satellite clock drift, ionospheric and troposferic effects are negligeble
         # See Global Positioning System_ Signals, Measurements, and Performance section 6.2.1
@@ -237,6 +240,7 @@ class AntennaSimulator:
         return direct_doppler
 
     def get_dilution_of_presition(self, satellite_positions_ecef,  player_position):
+        satellite_amount = satellite_positions_ecef.shape[0]
         # TODO add tropospheric and ionospheric factors, as well as signal noise
 
         A = np.concatenate(
@@ -244,7 +248,7 @@ class AntennaSimulator:
                 (satellite_positions_ecef - player_position) / np.linalg.norm(satellite_positions_ecef - player_position,
                                                                          axis=1).reshape(
                     (-1, 1)),
-                np.ones((1, self.satellite_amount)).T),
+                np.ones((1, satellite_amount)).T),
             axis=1
         )
         eps = np.eye(A.shape[1]) * 1e-15  # Prevent heavily broken satellite configurations from crashing the progarm

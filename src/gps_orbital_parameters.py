@@ -70,8 +70,7 @@ def from_rinex(string: str) -> GpsOrbitalParameters:
     epoch_minute = np.uint64(matches.group("minute"))
     epoch_second = np.uint64(matches.group("second"))
     # HACK read the time2gps docs
-    epoch = time2gps(Time(epoch_year * u.year + epoch_month * u.month + epoch_day * u.day
-                                      + epoch_hour * u.hour + epoch_minute * u.minute + epoch_second * u.s, format='gps'))
+    epoch = time2gps(Time(f"{epoch_year}-{epoch_month}-{epoch_day}T{epoch_hour}:{epoch_minute}:{epoch_second}", format="isot", scale="tai"))
 
     week_of_year = convert_float(matches.group("gps_week"))
     toe = convert_float(matches.group("toe"))

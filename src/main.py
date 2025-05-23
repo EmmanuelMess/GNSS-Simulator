@@ -41,6 +41,17 @@ SIMULATION_0LAT0LON = {
     ),
     "jammer_noise": np.float64(0.0) # dB
 }
+SIMULATION_ROSARIO = {
+    "start_time": "2025-05-01T09:00:00.000",
+    "receiver_position_start": llh2ecef(np.array([np.deg2rad(-32.9575), np.deg2rad(-60.639444444444), 0.0], dtype=np.float64)),
+    "satellite_filenames": ["invented-rosario/01.orbit", "invented-rosario/02.orbit", "invented-rosario/03.orbit",
+                       "invented-rosario/04.orbit", "invented-rosario/05.orbit", "invented-rosario/06.orbit"],
+    "ionospheric_model": (
+        np.array([0.6519 * 1e-8, 0.1490 * 1e-7, -0.5960 * 1e-7, -0.1192 * 1e-6], dtype=np.float64),
+        np.array([0.7782 * 1e5, 0.3277 * 1e5, -0.6554 * 1e5, -0.1966 * 1e6], dtype=np.float64)
+    ),
+    "jammer_noise": np.float64(0.0) # dB
+}
 
 PIXELS_TO_METERS = 1/10
 METERS_TO_PIXELS = 1/PIXELS_TO_METERS
@@ -93,7 +104,7 @@ def main():
     # Implementation specific constants
     width, height = 800, 450
     rng = np.random.default_rng()
-    simulation_data = SIMULATION_0LAT0LON
+    simulation_data = SIMULATION_ROSARIO
     start_time = Time(simulation_data["start_time"], format="isot", scale="utc")
     start_receiver_position = simulation_data["receiver_position_start"]
     e_axis, n_axis, u_axis = pos2enu_base(ecef2llh(start_receiver_position))
@@ -130,11 +141,11 @@ def main():
     rinex_generator = create_rinex_generator(start_receiver_position, cut_satellite_orbits, start_time, gps_start_time,
                                              ionospheric_alphas, ionospheric_betas)
     # Position simulation components
-    simulator = AntennaSimulator(rng, SATELLITE_NUMBER, satellite_clock_bias, GNSS_SIGNAL_FREQUENCY, ionospheric_alphas,
+    simulator = AntennaSimulator(rng, satellite_clock_bias, GNSS_SIGNAL_FREQUENCY, ionospheric_alphas,
                                  ionospheric_betas, simulation_data["jammer_noise"], NOISE_CORRECTION_LEVEL,
                                  NOISE_FIX_LOSS_LEVEL, NOISE_EFFECT_RATE, SATELLITE_NOISE_STD,
                                  TROPOSPHERIC_CUTOFF_ANGLE)
-    solver = Solver(SATELLITE_NUMBER, satellite_clock_bias, GNSS_SIGNAL_FREQUENCY)
+    solver = Solver(satellite_clock_bias, GNSS_SIGNAL_FREQUENCY)
     sensor = GnssSensor(simulator, solver, rinex_generator, np.array(satellite_prns, dtype=np.int64), CUTOFF_ELEVATION)
 
     # State
