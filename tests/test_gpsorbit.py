@@ -1,10 +1,9 @@
 import unittest
 
 import numpy as np
-from astropy.time import Time, TimeGPS
+from hifitime import *
 
 from src import gps_orbital_parameters
-from src.conversions import time2gps
 from src.gps_orbital_parameters import GpsOrbitalParameters
 from src.gps_satellite import GpsSatellite
 from tests.constants import DISTANCE_PRECISION
@@ -19,8 +18,8 @@ class GpsOrbitTest(unittest.TestCase):
         mean_anomaly: np.float64 = np.float64(2.367_757_296_49)
         sqrt_semi_major_axis: np.float64 = np.float64(6_499.315_173_94)
 
-        epoch = time2gps(Time("2025-04-19 10:00:00", format="iso"))
-        time_of_ephemeris = time2gps(Time("2025-04-19 09:46:50.000", format="iso"))
+        epoch = Epoch.init_from_gregorian(2025, 4, 19, 10, 0, 0, 0, TimeScale.UTC).to_time_scale(TimeScale.GPST)
+        time_of_ephemeris = Epoch.init_from_gregorian(2025, 4, 19, 9, 46, 50, 0, TimeScale.UTC).to_time_scale(TimeScale.GPST)
 
         satellite_parameters = GpsOrbitalParameters(
             satellite_system="G",
@@ -58,7 +57,7 @@ class GpsOrbitTest(unittest.TestCase):
             fit_interval_in_hours=np.float64(0.0),
         )
 
-        calculated_position_time = time2gps(Time("2025-04-19 09:00:00.000", format="iso"))
+        calculated_position_time = Epoch.init_from_gregorian(2025, 4, 19, 9, 0, 0, 0, TimeScale.UTC).to_time_scale(TimeScale.GPST)
         satellite = GpsSatellite(satellite_parameters)
         (position, velocity) = satellite.position_velocity(calculated_position_time)
 
@@ -81,7 +80,7 @@ G01 2025 05 01 09 00 37 0.000000000000E+00 0.000000000000E+00 0.000000000000E+00
         """)
         satellite = GpsSatellite(satellite_parameters)
         # 2025-05-01T09:00:00.000 UTC
-        calculated_position_time = time2gps(Time(1430125218.0, format="gps"))
+        calculated_position_time = Epoch.init_from_gpst_seconds(1430125218.0)
         (position, velocity) = satellite.position_velocity(calculated_position_time)
         # Calculated with RTKLIB
         self.assertAlmostEqual(position[0], np.float64(22_258_163.145151), delta=DISTANCE_PRECISION)
@@ -108,7 +107,7 @@ G06 2025 04 09 23 59 44-2.959421835840E-04-2.148681232939E-11 0.000000000000E+00
         """)
         satellite = GpsSatellite(satellite_parameters)
         # 2025  4 10  0  0  0.00000000 GPS
-        calculated_position_time = time2gps(Time(1428278400.0, format="gps"))
+        calculated_position_time = Epoch.init_from_gregorian(2025, 4, 10, 0, 0, 0, 0, TimeScale.GPST)
         (position, velocity) = satellite.position_velocity(calculated_position_time)
         # Here error is larger because the estimated satellite position is an amalgamation of data
         # PG06  23201.392605  -4035.022068 -12344.501318   -295.941970
@@ -133,7 +132,7 @@ G03 2025 01 01 08 00 00 6.371350027621D-04 7.958078640513D-12 0.000000000000D+00
                 """)
         satellite = GpsSatellite(satellite_parameters)
         # 2025  1  1  9  0  0.00000000 GPS
-        calculated_position_time = time2gps(Time(1419757218.0, format="gps"))
+        calculated_position_time = Epoch.init_from_gregorian(2025, 1, 1, 9, 0, 0, 0, TimeScale.GPST)
         (position, velocity) = satellite.position_velocity(calculated_position_time)
         # Here error is larger because the estimated satellite position is an amalgamation of data
         # PG03 -17038.762554  12232.489979 -16388.346180    637.165738

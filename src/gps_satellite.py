@@ -1,11 +1,11 @@
 from typing import Tuple
 
 import numpy as np
-from astropy.time import Time
+from hifitime import Epoch
 
 from src.gps_orbital_parameters import GpsOrbitalParameters
 from src.numpy_types import array3d
-from src.conversions import time_gps2seconds_of_week, gps_seconds_wrap, time_gps2week_number
+from src.conversions import time_gps2seconds_of_week, gps_seconds_wrap, time_gps2week_number, SECONDS_IN_NANOSECONDS
 
 
 class GpsSatellite:
@@ -15,7 +15,7 @@ class GpsSatellite:
         if orbit_parameters.sv_clock_drift != 0 or orbit_parameters.sv_clock_drift_rate != 0:
             print(f"WARNING: drift and drift rate parameters are not 0 for satellite {orbit_parameters.prn_number} but clock drift will NOT be modeled!")
 
-    def position_velocity(self, gps_time: Time) -> Tuple[array3d, array3d]:
+    def position_velocity(self, gps_time: Epoch) -> Tuple[array3d, array3d]:
         # From IS-GPS-200M table 20-IV
 
         # Gravitational effect of the Earth
@@ -45,9 +45,9 @@ class GpsSatellite:
         # Mean motion
         n_0 = np.sqrt(mu / a ** 3)
         # TODO add the satellite bias to the time calculation
-        t_oe = time_gps2seconds_of_week(self.orbit_parameters.time_of_ephemeris.gps) + 19 # HACK 19s because astropy has issues
+        t_oe = time_gps2seconds_of_week(np.float64(self.orbit_parameters.time_of_ephemeris.to_gpst_seconds()))
         # TODO add the receiver bias to the time calculation
-        t = time_gps2seconds_of_week(gps_time.gps) + 19 # HACK 19s because astropy has issues
+        t = time_gps2seconds_of_week(np.float64(gps_time.to_gpst_seconds()))
         tk = gps_seconds_wrap(t - t_oe)
         # Corrected mean motion
         n = n_0 + delta_n

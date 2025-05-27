@@ -18,7 +18,7 @@ class TrosposphericModelTest(unittest.TestCase):
 
         cutoff_angle = np.deg2rad(7)
 
-        simulator = AntennaSimulator(None, np.array([]), None, None,
+        simulator = AntennaSimulator(None,None, None,
                                           None, None, np.float64(0.0), None,
                                           None, None, None, cutoff_angle)
 

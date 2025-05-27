@@ -63,7 +63,7 @@ class GroundTruthTest(unittest.TestCase):
 
 class TaylorAproximationTest(unittest.TestCase):
     def test_laplata_position(self):
-        solver = Solver(SATELLITE_POSITIONS.shape[0], SATELLITE_CLOCK_BIAS,None)
+        solver = Solver(SATELLITE_CLOCK_BIAS,None)
         approx_position, clock_bias, gnss_position_error = solver.solve_position(SATELLITE_POSITIONS, PSEUDORANGES, 1e-5)
 
         distance = np.linalg.norm(approx_position - REAL_POSITION)

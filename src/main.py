@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List
 import datetime as dt
 
-from astropy.time import Time
+from hifitime import Epoch, TimeScale, Duration, Unit
 from pyray import *
 from raylib import *
 
@@ -20,7 +20,7 @@ from src import gps_orbital_parameters
 from src.gps_satellite import GpsSatellite
 
 SIMULATION_DUMG = {
-    "start_time": "2025-01-01T09:00:00.000",
+    "start_time": "2025-01-01T09:00:00.000 UTC",
     "receiver_position_start": llh2ecef(np.array([np.deg2rad(-66.665169), np.deg2rad(140.002200), -3.38], dtype=np.float64)),
     "satellite_filenames": ["dumg/03.orbit", "dumg/04.orbit", "dumg/06.orbit", "dumg/09.orbit", "dumg/11.orbit",
                             "dumg/26.orbit", "dumg/28.orbit", "dumg/31.orbit"],
@@ -31,7 +31,7 @@ SIMULATION_DUMG = {
     "jammer_noise": np.float64(0.0) # dB
 }
 SIMULATION_0LAT0LON = {
-    "start_time": "2025-05-01T09:00:00.000",
+    "start_time": "2025-05-01T09:00:00.000 UTC",
     "receiver_position_start": llh2ecef(np.array([np.deg2rad(0.0), np.deg2rad(0.0), 0.0], dtype=np.float64)),
     "satellite_filenames": ["invented-0lat-0lon/01.orbit", "invented-0lat-0lon/02.orbit", "invented-0lat-0lon/03.orbit",
                        "invented-0lat-0lon/04.orbit", "invented-0lat-0lon/05.orbit", "invented-0lat-0lon/06.orbit"],
@@ -42,8 +42,8 @@ SIMULATION_0LAT0LON = {
     "jammer_noise": np.float64(0.0) # dB
 }
 SIMULATION_ROSARIO = {
-    "start_time": "2025-05-01T09:00:00.000",
-    "receiver_position_start": llh2ecef(np.array([np.deg2rad(-32.9575), np.deg2rad(-60.639444444444), 0.0], dtype=np.float64)),
+    "start_time": "2025-05-01T09:00:00.000 UTC",
+    "receiver_position_start": llh2ecef(np.array([np.deg2rad(-32.9575), np.deg2rad(-60.639444444444), 25.0], dtype=np.float64)),
     "satellite_filenames": ["invented-rosario/01.orbit", "invented-rosario/02.orbit", "invented-rosario/03.orbit",
                        "invented-rosario/04.orbit", "invented-rosario/05.orbit", "invented-rosario/06.orbit"],
     "ionospheric_model": (
@@ -55,7 +55,7 @@ SIMULATION_ROSARIO = {
 
 PIXELS_TO_METERS = 1/10
 METERS_TO_PIXELS = 1/PIXELS_TO_METERS
-MOVEMENT_SPEED_METERS_PER_SECOND = 5.0
+MOVEMENT_SPEED_METERS_PER_SECOND = 0.2
 SKYPLOT_SIZE = 200
 
 GNSS_MESSAGE_FREQUENCY = 5 # Hz
@@ -85,8 +85,8 @@ NOISE_EFFECT_RATE = np.float64(5) / (NOISE_FIX_LOSS_LEVEL - NOISE_CORRECTION_LEV
 GNSS_SIGNAL_FREQUENCY = GPS_L1_FREQUENCY
 
 
-def create_rinex_generator(start_position_ecef, satellite_orbits: List[GpsSatellite], utc_start: Time,
-                           gps_start: Time, satellite_alphas: np.ndarray[4, np.float64],
+def create_rinex_generator(start_position_ecef, satellite_orbits: List[GpsSatellite], utc_start: Epoch,
+                           gps_start: Epoch, satellite_alphas: np.ndarray[4, np.float64],
                            satellite_betas: np.ndarray[4, np.float64]) -> RinexGenerator:
     folder_name = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     folder_path = os.path.join("output", folder_name)
@@ -105,11 +105,11 @@ def main():
     width, height = 800, 450
     rng = np.random.default_rng()
     simulation_data = SIMULATION_ROSARIO
-    start_time = Time(simulation_data["start_time"], format="isot", scale="utc")
+    utc_start_time = Epoch(simulation_data["start_time"])
     start_receiver_position = simulation_data["receiver_position_start"]
     e_axis, n_axis, u_axis = pos2enu_base(ecef2llh(start_receiver_position))
     s_axis = -n_axis # HACK because y axis is inverted
-    gps_start_time = time2gps(start_time)
+    gps_start_time = utc_start_time.to_time_scale(TimeScale.GPST)
     ionospheric_alphas, ionospheric_betas = simulation_data["ionospheric_model"]
     satellite_orbits: List[GpsSatellite] = []
 
@@ -130,15 +130,15 @@ def main():
 
     print(f"Loaded {len(satellite_orbits)} satellites, {len(visible_satellite_orbits)} visible, cut to {SATELLITE_NUMBER}")
     print(satellite_prns)
-    print(f"Sim start time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Sim start time: {utc_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Reveiver start position {start_receiver_position}, enu {e_axis} {n_axis} {u_axis}")
     print(f"Satellite epochs: {[satellite.parameters().time_of_ephemeris.strftime('%Y-%m-%d %H:%M:%S') for satellite in cut_satellite_orbits]}")
     print(f"Satellite positions: {[np.round(np.rad2deg(ecef2llh(satellite.position_velocity(gps_start_time)[0]))) for satellite in cut_satellite_orbits]}")
     print(f"Satellite velocities: {[satellite.position_velocity(gps_start_time)[1] for satellite in cut_satellite_orbits]}")
     print(f"Satelite clock biases: {satellite_clock_bias}")
-    print(f"Seconds of week to first epoch {time_gps2seconds_of_week(gps_start_time.gps)}")
+    print(f"Seconds of week to first epoch {time_gps2seconds_of_week(gps_start_time.to_gpst_seconds())}")
 
-    rinex_generator = create_rinex_generator(start_receiver_position, cut_satellite_orbits, start_time, gps_start_time,
+    rinex_generator = create_rinex_generator(start_receiver_position, cut_satellite_orbits, utc_start_time, gps_start_time,
                                              ionospheric_alphas, ionospheric_betas)
     # Position simulation components
     simulator = AntennaSimulator(rng, satellite_clock_bias, GNSS_SIGNAL_FREQUENCY, ionospheric_alphas,
@@ -149,7 +149,7 @@ def main():
     sensor = GnssSensor(simulator, solver, rinex_generator, np.array(satellite_prns, dtype=np.int64), CUTOFF_ELEVATION)
 
     # State
-    time_utc = start_time
+    time_utc = utc_start_time
     player_positions: List[array3d] = [start_receiver_position]
     player_velocities: List[array3d] = [np.array([0, 0, 0], dtype=np.float64)]
     gnss_positions: List[array3d] = []
@@ -161,8 +161,8 @@ def main():
     while not window_should_close():
         delta = get_frame_time()
 
-        time_utc += dt.timedelta(seconds=delta)
-        time_gps = time2gps(time_utc)
+        time_utc += Unit.Second * delta
+        time_gps = time_utc.to_time_scale(TimeScale.GPST)
 
         time_since_gnss += delta
 

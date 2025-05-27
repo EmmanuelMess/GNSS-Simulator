@@ -1,7 +1,7 @@
 from typing import Tuple, List
 
 import numpy as np
-from astropy.time import Time
+from hifitime.hifitime import Epoch
 
 from src.antenna_simulator import AntennaSimulator
 from src.solver import Solver
@@ -20,7 +20,7 @@ class GnssSensor:
         self.cutoff_elevation_rad = cutoff_elevation_rad
 
     def update(self, satellite_positions_ecef, satellite_velocities_ecef, player_positions, player_velocities,
-               reciever_clock_bias, reciever_clock_drift, time_gps: Time, time_utc: Time)\
+               reciever_clock_bias, reciever_clock_drift, time_gps: Epoch, time_utc: Epoch)\
             -> Tuple[array3d, array3d, np.float64, np.float64]:
         print("===")
         print(f"GPS time: {time_gps.strftime('%Y-%m-%d %H:%M:%S.%f')}")
@@ -31,7 +31,7 @@ class GnssSensor:
         # TODO check if satellites are over the horizon
         player_position = player_positions[-1]
 
-        time_of_week_gps_seconds = time_gps2seconds_of_week(time_gps.gps)
+        time_of_week_gps_seconds = time_gps2seconds_of_week(np.float64(time_gps.to_gpst_seconds()))
 
         visible_index = np.array([
             is_satellite_overhead(player_position, satellite_position, self.cutoff_elevation_rad)

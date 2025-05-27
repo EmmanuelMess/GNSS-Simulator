@@ -59,7 +59,7 @@ class GroundTruthTest(unittest.TestCase):
 
 class TaylorAproximationTest(unittest.TestCase):
     def test_mcmurdo_position_few_satellites(self):
-        solver = Solver(4, SATELLITE_CLOCK_BIAS[FOUR_SATELLITES],None)
+        solver = Solver(SATELLITE_CLOCK_BIAS[FOUR_SATELLITES],None)
         approx_position, clock_bias, gnss_position_error =\
             solver.solve_position(SATELLITE_POSITIONS[FOUR_SATELLITES], PSEUDORANGES[FOUR_SATELLITES], 1e-3)
 
@@ -69,7 +69,7 @@ class TaylorAproximationTest(unittest.TestCase):
         self.assertAlmostEqual(clock_bias, REAL_RECEIVER_BIAS, delta=0.001)
 
     def test_mcmurdo_position(self):
-        solver = Solver(SATELLITE_POSITIONS.shape[0], SATELLITE_CLOCK_BIAS,None)
+        solver = Solver(SATELLITE_CLOCK_BIAS,None)
         approx_position, clock_bias, gnss_position_error =\
             solver.solve_position(SATELLITE_POSITIONS, PSEUDORANGES, 1e-3)
 
@@ -81,7 +81,7 @@ class TaylorAproximationTest(unittest.TestCase):
 
 class LSEAproximationTest(unittest.TestCase):
     def test_mcmurdo_position_few_satellites(self):
-        solver = Solver(4, SATELLITE_CLOCK_BIAS[FOUR_SATELLITES],None)
+        solver = Solver(SATELLITE_CLOCK_BIAS[FOUR_SATELLITES],None)
         approx_position, clock_bias, gnss_position_error =\
             solver.solve_position_scipy(SATELLITE_POSITIONS[FOUR_SATELLITES], PSEUDORANGES[FOUR_SATELLITES], 1e-3)
 
@@ -91,7 +91,7 @@ class LSEAproximationTest(unittest.TestCase):
         self.assertAlmostEqual(clock_bias, REAL_RECEIVER_BIAS, delta=0.001)
 
     def test_mcmurdo_position(self):
-        solver = Solver(SATELLITE_POSITIONS.shape[0], SATELLITE_CLOCK_BIAS, None)
+        solver = Solver(SATELLITE_CLOCK_BIAS, None)
         approx_position, clock_bias, gnss_position_error =\
             solver.solve_position_scipy(SATELLITE_POSITIONS, PSEUDORANGES, 1e-3)
 

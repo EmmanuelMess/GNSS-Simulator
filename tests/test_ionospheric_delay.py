@@ -15,8 +15,7 @@ class IonosphericDelayTest(unittest.TestCase):
 
         alphas = np.array([3.82e-8, 1.49e-8, -1.79e-7, 0], dtype=np.float64)
         betas = np.array([1.43e5, 0, -3.28e5, 1.13e5], dtype=np.float64)
-        simulator = AntennaSimulator(None, satellites_ecef.shape[0], satellite_clock_bias,
-                                    GPS_L1_FREQUENCY, alphas, betas, np.float64(0.0),
+        simulator = AntennaSimulator(None, satellite_clock_bias, GPS_L1_FREQUENCY, alphas, betas, np.float64(0.0),
                                     None, None, None,
                                      None, None)
 
@@ -49,7 +48,7 @@ class IonosphericDelayTest(unittest.TestCase):
         satellite_clock_bias = np.array([0])
         alphas = np.array([3.82e-8, 1.49e-8, -1.79e-7, 0], dtype=np.float64)
         betas = np.array([1.43e5, 0, -3.28e5, 1.13e5], dtype=np.float64)
-        simulator = AntennaSimulator(None, 1, satellite_clock_bias,
+        simulator = AntennaSimulator(None, satellite_clock_bias,
                                     GPS_L1_FREQUENCY, alphas, betas, np.float64(0.0),
                                     None, None, None,
                                      None, None)
@@ -83,7 +82,7 @@ class IonosphericDelayTest(unittest.TestCase):
         satellite_clock_bias = np.array([0])
         alphas = np.array([.3820e-7,  .1490e-7,  -.1790e-06,   .0000], dtype=np.float64)
         betas = np.array([.1430e6, .0000,  -.3280e+6,   .1130e+06], dtype=np.float64)
-        simulator = AntennaSimulator(None, 1, satellite_clock_bias,
+        simulator = AntennaSimulator(None, satellite_clock_bias,
                                      GPS_L1_FREQUENCY, alphas, betas, np.float64(0.0),
                                      None, None, None,
                                      None, None)

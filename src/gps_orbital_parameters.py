@@ -1,19 +1,18 @@
 import re
 from dataclasses import dataclass
-import astropy.units as u
 
 import numpy as np
-from astropy.time import Time
+from hifitime import Epoch, TimeScale
 
-from src.conversions import time2gps
+from src.conversions import SECONDS_IN_WEEK
 
 
 @dataclass
 class GpsOrbitalParameters:
     satellite_system: str
     prn_number: int
-    epoch: Time
-    time_of_ephemeris: Time
+    epoch: Epoch
+    time_of_ephemeris: Epoch
     sv_clock_bias: np.float64
     sv_clock_drift: np.float64
     sv_clock_drift_rate: np.float64
@@ -69,14 +68,13 @@ def from_rinex(string: str) -> GpsOrbitalParameters:
     epoch_hour = np.uint64(matches.group("hour"))
     epoch_minute = np.uint64(matches.group("minute"))
     epoch_second = np.uint64(matches.group("second"))
-    # HACK read the time2gps docs
-    epoch = time2gps(Time(f"{epoch_year}-{epoch_month}-{epoch_day}T{epoch_hour}:{epoch_minute}:{epoch_second}", format="isot", scale="tai"))
+
+    epoch = Epoch.init_from_gregorian(epoch_year, epoch_month, epoch_day, epoch_hour, epoch_minute, epoch_second, 0, TimeScale.GPST)
 
     week_of_year = convert_float(matches.group("gps_week"))
     toe = convert_float(matches.group("toe"))
 
-    # HACK read the time2gps docs
-    time_of_ephemeris = time2gps(Time(week_of_year * u.week + toe * u.s, format='gps'))
+    time_of_ephemeris = Epoch.init_from_gpst_seconds(week_of_year * SECONDS_IN_WEEK + toe)
 
     parameters = GpsOrbitalParameters(
         satellite_system = matches.group("system"),

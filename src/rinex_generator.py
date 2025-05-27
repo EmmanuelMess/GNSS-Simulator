@@ -2,8 +2,9 @@ import os
 from typing import List
 
 import numpy as np
-from astropy.time import Time
+from hifitime import Epoch, Unit
 
+from src.conversions import DAYS_IN_WEEK
 from src.numpy_types import array3d
 from src.gps_orbital_parameters import GpsOrbitalParameters
 from src.gps_satellite import GpsSatellite
@@ -15,14 +16,14 @@ class RinexGenerator:
     RINEX can only be generated with GPS data
     """
 
-    def __init__(self, folder: os.path, approximate_start_position: array3d, utc_start: Time, gps_start: Time,
+    def __init__(self, folder: os.path, approximate_start_position: array3d, utc_start: Epoch, gps_start: Epoch,
                  satellite_alphas: np.ndarray[4, np.float64], satellite_betas: np.ndarray[4, np.float64]):
         self.folder = folder
 
         # TODO make it auto close the files
 
         # TODO check if the week number starts at 0
-        file_name = f"{utc_start.strftime('%Y%m%d%H%M%S')}.{utc_start.strftime('%W')}"
+        file_name = f"{utc_start.strftime('%Y%m%d%H%M%S')}.{utc_start.day_of_year() // DAYS_IN_WEEK}"
 
         self.navigation_file = open(os.path.join(folder, f"{file_name}P"), "w") #TODO fix name
         self.observations_file = open(os.path.join(folder, f"{file_name}O"), "w") #TODO fix name
@@ -30,7 +31,7 @@ class RinexGenerator:
         self._write_header_navigation_file(utc_start, satellite_alphas, satellite_betas)
         self._write_header_observations_file(approximate_start_position, utc_start, gps_start)
 
-    def _write_header_navigation_file(self, utc_start: Time, satellite_alphas: np.ndarray[4, np.float64],
+    def _write_header_navigation_file(self, utc_start: Epoch, satellite_alphas: np.ndarray[4, np.float64],
                                       satellite_betas: np.ndarray[4, np.float64]):
         def format(value: np.float64) -> str:
             return f"{value:+1.4E}"
@@ -52,8 +53,8 @@ class RinexGenerator:
         # TODO do we need this? self.navigation_file.write(f"    {leap_seconds: <18}                                     LEAP SECONDS        \n")
         self.navigation_file.write(f"                                                            END OF HEADER       \n")
 
-    def _write_header_observations_file(self, approximate_start_position: array3d, time_utc: Time,
-                                        time_of_first_observation: Time):
+    def _write_header_observations_file(self, approximate_start_position: array3d, time_utc: Epoch,
+                                        time_of_first_observation: Epoch):
         position_x = np.round(approximate_start_position[0], 4)
         position_y = np.round(approximate_start_position[1], 4)
         position_z = np.round(approximate_start_position[2], 4)
@@ -61,7 +62,7 @@ class RinexGenerator:
         time_utc_str = f"{time_utc.strftime('%Y%m%d')} {time_utc.strftime('%H%M%S')} UTC"
 
         reformatted_seconds = f"{np.float64(time_of_first_observation.strftime('%S.%f')): 2.7f}"
-        start_timestamp_str = f"{time_of_first_observation.strftime(' %Y    %m    %d    %H    %M')}   {reformatted_seconds:>10}"
+        start_timestamp_str = f" {time_of_first_observation.strftime('%Y    %m    %d    %H    %M')}   {reformatted_seconds:>10}"
 
         self.observations_file.write(f"     3.03           OBSERVATION DATA    G: GPS              RINEX VERSION / TYPE\n")
         self.observations_file.write(f"GnssSim             CIFASIS             {time_utc_str: >19} PGM / RUN BY / DATE \n")
@@ -89,7 +90,7 @@ class RinexGenerator:
 
         satellite_system = gps_parameters.satellite_system
         prn = gps_parameters.prn_number
-        epoch = gps_parameters.time_of_ephemeris.strftime("%Y %m %d %H %M %S")
+        epoch = gps_parameters.epoch.strftime("%Y %m %d %H %M %S")
         sv_clock_bias = format(gps_parameters.sv_clock_bias)
         sv_clock_drift = format(gps_parameters.sv_clock_drift)
         sv_clock_drift_rate = format(gps_parameters.sv_clock_drift_rate)
@@ -136,7 +137,7 @@ class RinexGenerator:
             rinex = self._satellite_rinex(satellite.parameters())
             self.navigation_file.write(rinex)
 
-    def add_position(self, time_gps: Time, prns: List[int], pseudoranges: List[np.float64],
+    def add_position(self, time_gps: Epoch, prns: List[int], pseudoranges: List[np.float64],
                      direct_doppler: List[np.float64]):
         observed_satellites = len(pseudoranges)
 
