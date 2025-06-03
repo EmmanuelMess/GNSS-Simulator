@@ -18,7 +18,7 @@ class GpsSatellite:
             print(f"WARNING: drift and drift rate parameters are not 0 for satellite {orbit_parameters.prn_number} but clock drift will NOT be modeled!")
 
     def position_velocity_for_receiver(self, receiver_position_ecef: array3d, arrival_gps_time: Epoch,
-                                       tolerance: np.float64 = 0.1):
+                                       tolerance: np.float64 = 0.1) -> Tuple[Epoch, Tuple[array3d, array3d]]:
         """
         Compute the satellite position at the time the signal was sent,
         for it to be received at position receiver_position_ecef at time gps_time
@@ -26,32 +26,21 @@ class GpsSatellite:
         # ECEF to ECI provided from Principles of GNSS, Inertial, and Multisensor Integrated Navigation Systems section 2.5.1
         # Algorithm from DESARROLLO E IMPLEMENTACIÓN DE UN SIMULADOR DE DATOS GNSS section 2.3
 
-        estimated_transmission_time_gps = arrival_gps_time
-        error = np.inf
+        dt = np.float64(0)
 
         for _ in range(10):
+            transmission_satellite_position_ecef, _ = self.position_velocity(arrival_gps_time - Unit.Second * dt)
+            pseudorange = np.linalg.norm(receiver_position_ecef - transmission_satellite_position_ecef)
+            error = np.abs(pseudorange / scipy.constants.c - dt) * scipy.constants.c
+
             if error < tolerance:
                 break
-            satellite_position_ecef, satellite_velocity_ecef = self.position_velocity(estimated_transmission_time_gps)
 
-            dt = np.linalg.norm(receiver_position_ecef - satellite_position_ecef) / scipy.constants.c
-            theta = OMEGA_EARTH * dt
+            dt = np.linalg.norm(receiver_position_ecef - transmission_satellite_position_ecef) / scipy.constants.c
 
-            ecef2eci_position_matrix = np.array([
-                [np.cos(theta), -np.sin(theta), 0],
-                [np.sin(theta),  np.cos(theta), 0],
-                [0,              0,             1],
-            ], np.float64)
+        estimated_transmission_time_gps = arrival_gps_time - Unit.Second * dt
 
-            receiver_position_eci = receiver_position_ecef
-
-            satellite_position_eci = ecef2eci_position_matrix @ (satellite_position_ecef - satellite_velocity_ecef * dt)
-
-            range_approx = np.linalg.norm(satellite_position_eci - receiver_position_eci)
-            estimated_transmission_time_gps = arrival_gps_time - Unit.Second * (range_approx / scipy.constants.c)
-            error = np.linalg.norm(satellite_position_ecef - self.position_velocity(estimated_transmission_time_gps)[0], ord=1)
-
-        return self.position_velocity(estimated_transmission_time_gps)
+        return estimated_transmission_time_gps, self.position_velocity(estimated_transmission_time_gps)
 
 
     def position_velocity(self, gps_time: Epoch) -> Tuple[array3d, array3d]:

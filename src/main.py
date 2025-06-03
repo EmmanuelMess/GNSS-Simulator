@@ -186,7 +186,7 @@ def main():
         player_velocity = MOVEMENT_SPEED_METERS_PER_SECOND * player_delta
         player_velocities.append(player_velocity)
 
-        satellite_positions_velocities = np.array([satellite.position_velocity_for_receiver(player_position, time_gps) for satellite in cut_satellite_orbits], dtype=np.float64)
+        satellite_positions_velocities = np.array([satellite.position_velocity_for_receiver(player_position, time_gps)[1] for satellite in cut_satellite_orbits], dtype=np.float64)
         satellite_positions = satellite_positions_velocities[:, 0, :]
         satellite_velocities = satellite_positions_velocities[:, 1, :]
 

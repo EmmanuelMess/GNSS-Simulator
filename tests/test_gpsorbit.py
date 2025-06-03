@@ -1,12 +1,13 @@
 import unittest
 
 import numpy as np
+import scipy
 from hifitime import *
 
 from src import gps_orbital_parameters
 from src.gps_orbital_parameters import GpsOrbitalParameters
 from src.gps_satellite import GpsSatellite
-from tests.constants import DISTANCE_PRECISION
+from tests.constants import DISTANCE_PRECISION, WSG84_SEMI_MAJOR_AXIS, TIME_PRECISION
 
 
 class GpsOrbitTest(unittest.TestCase):
@@ -139,6 +140,37 @@ G03 2025 01 01 08 00 00 6.371350027621D-04 7.958078640513D-12 0.000000000000D+00
         self.assertAlmostEqual(position[0], np.float64(-17_038_762.554), delta=5.0)
         self.assertAlmostEqual(position[1], np.float64(12_232_489.979), delta=5.0)
         self.assertAlmostEqual(position[2], np.float64(-16_388_346.180), delta=5.0)
+
+    def test_from_receiver(self):
+        # Data from COD0MGXFIN_20250010000_01D_05M_ORB.SP3 and DUMG00ATA_R_20250010000_01D_GN.rnx
+        # Courtesy of NASA's CDDIS database
+
+        # 2025 01 01 08 00 00 GPS
+        satellite_parameters = gps_orbital_parameters.from_rinex("""\
+G03 2025 01 01 08 00 00 6.371350027621D-04 7.958078640513D-12 0.000000000000D+00
+     1.890000000000D+02-1.086875000000D+02 4.158387499245D-09-2.490297162278D+00
+    -5.532056093216D-06 5.664711818099D-03 1.670792698860D-06 5.153604104996D+03
+     2.880000000000D+05 8.195638656616D-08-8.084467420233D-01 2.235174179077D-08
+     9.876358017611D-01 3.614062500000D+02 1.146133193117D+00-8.093194256883D-09
+    -1.607209803882D-10 1.000000000000D+00 2.347000000000D+03 0.000000000000D+00
+     4.000000000000D+00 0.000000000000D+00 1.396983861923D-09 1.890000000000D+02
+     2.808000000000D+05 4.000000000000D+00\
+                """)
+        satellite = GpsSatellite(satellite_parameters)
+        # 2025  1  1  9  0  0.00000000 GPS
+        arrival_gps_time = Epoch.init_from_gregorian(2025, 1, 1, 9, 0, 0, 0, TimeScale.GPST)
+        receiver_position_ecef = np.array([WSG84_SEMI_MAJOR_AXIS, 0, 0], dtype=np.float64)
+
+        (position_at_arrival, velocity_at_arrival) = satellite.position_velocity(arrival_gps_time)
+        transmission_gps_time, (position_at_transmission, velocity_at_transmission) = satellite.position_velocity_for_receiver(
+            receiver_position_ecef, arrival_gps_time, DISTANCE_PRECISION
+        )
+
+        range = np.linalg.norm(receiver_position_ecef - position_at_transmission)
+        dt = arrival_gps_time.to_gpst_nanoseconds() - transmission_gps_time.to_gpst_nanoseconds()
+
+        self.assertNotAlmostEqual(np.linalg.norm(position_at_arrival - position_at_transmission), 0.0, delta=5.0)
+        self.assertAlmostEqual(range / scipy.constants.c * 1e+9, dt, delta=1)
 
 if __name__ == '__main__':
     unittest.main()
