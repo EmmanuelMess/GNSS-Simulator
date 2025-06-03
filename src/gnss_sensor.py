@@ -28,8 +28,8 @@ class GnssSensor:
         print(f"Satelite positions: {satellite_positions_ecef}")
         print(f"Satelite velocities: {satellite_velocities_ecef}")
 
-        # TODO check if satellites are over the horizon
         player_position = player_positions[-1]
+        player_velocity = player_velocities[-1]
 
         time_of_week_gps_seconds = time_gps2seconds_of_week(np.float64(time_gps.to_gpst_seconds()))
 
@@ -59,7 +59,6 @@ class GnssSensor:
         print(f"GDOP {gdop} HDOP {hdop} VDOP {vdop} PDOP {pdop}")
         print(f"Error {np.linalg.norm(position_aproximation-player_position)}m, real position {player_position}m, real reciever clock bias {reciever_clock_bias}s")
 
-        player_velocity = player_velocities[-1]
         direct_doppler = self.simulator.get_doppler(visible_satellite_positions_ecef, satellite_velocities_ecef,
                                                     player_position, player_velocity, reciever_clock_drift)
 

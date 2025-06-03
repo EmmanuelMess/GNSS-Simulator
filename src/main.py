@@ -2,7 +2,6 @@ import datetime
 import os
 from pathlib import Path
 from typing import List
-import datetime as dt
 
 from hifitime import Epoch, TimeScale, Duration, Unit
 from pyray import *
@@ -63,10 +62,10 @@ CUTOFF_ELEVATION = np.deg2rad(10)
 
 SATELLITE_NUMBER = 6
 
-RECEIVER_CLOCK_BIAS = np.float64(1 * 1e-3)
+RECEIVER_CLOCK_BIAS = np.float64(0)# np.float64(1 * 1e-3)
 # Walk of 0.1us per second
 # From https://www.e-education.psu.edu/geog862/node/1716
-RECEIVER_CLOCK_WALK = np.float64(1 * 1e-6)
+RECEIVER_CLOCK_WALK = np.float64(0)#np.float64(1 * 1e-6)
 
 SATELLITE_NOISE_STD = np.float64(0.0)
 
@@ -166,10 +165,6 @@ def main():
 
         time_since_gnss += delta
 
-        satellite_positions_velocities = np.array([satellite.position_velocity(time_gps) for satellite in cut_satellite_orbits], dtype=np.float64)
-        satellite_positions = satellite_positions_velocities[:, 0, :]
-        satellite_velocities = satellite_positions_velocities[:, 1, :]
-
         if is_key_down(KEY_LEFT) or is_key_down(KEY_A):
             player_delta_x = -1
         elif is_key_down(KEY_RIGHT) or is_key_down(KEY_D):
@@ -190,6 +185,10 @@ def main():
 
         player_velocity = MOVEMENT_SPEED_METERS_PER_SECOND * player_delta
         player_velocities.append(player_velocity)
+
+        satellite_positions_velocities = np.array([satellite.position_velocity_for_receiver(player_position, time_gps) for satellite in cut_satellite_orbits], dtype=np.float64)
+        satellite_positions = satellite_positions_velocities[:, 0, :]
+        satellite_velocities = satellite_positions_velocities[:, 1, :]
 
         if time_since_gnss > 1/GNSS_MESSAGE_FREQUENCY:
             # See GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1

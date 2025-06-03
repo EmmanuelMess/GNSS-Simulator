@@ -2,7 +2,7 @@ import numpy as np
 import scipy
 
 from src.conversions import ecef2llh, rad2semicircles, ecef2aer, semicircles2rad, seconds2day_of_year
-from src.constants import GPS_L1_FREQUENCY
+from src.constants import GPS_L1_FREQUENCY, OMEGA_EARTH
 
 
 class AntennaSimulator:
@@ -175,22 +175,20 @@ class AntennaSimulator:
 
         return dry_delay, wet_delay
 
-
-    def get_pseudoranges(self, satellite_positions_ecef, player_position_ecef, reciever_clock_bias,
-                         time_of_week_gps_seconds: np.float64):
+    def get_pseudoranges(self, satellite_positions_ecef, receiver_position_ecef, reciever_clock_bias, time_of_week_gps_seconds: np.float64):
 
         satellite_amount = satellite_positions_ecef.shape[0]
 
         # TODO compute the receiver clock time
-        ionospheric_delay = self._ionospheric_delay_calculation(satellite_positions_ecef, player_position_ecef,
+        ionospheric_delay = self._ionospheric_delay_calculation(satellite_positions_ecef, receiver_position_ecef,
                                                                 time_of_week_gps_seconds)
 
         day_of_year = seconds2day_of_year(time_of_week_gps_seconds)
-        tropospheric_delay = self._tropospheric_delay_calculation(satellite_positions_ecef, player_position_ecef, day_of_year)
+        tropospheric_delay = self._tropospheric_delay_calculation(satellite_positions_ecef, receiver_position_ecef, day_of_year)
 
         # See GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
         bias_difference = scipy.constants.c * (reciever_clock_bias - self.satellite_clock_bias.reshape((-1)))
-        range = np.linalg.norm(satellite_positions_ecef - player_position_ecef, axis=1).reshape((-1))
+        range = np.linalg.norm(satellite_positions_ecef - receiver_position_ecef, axis=1).reshape((-1))
 
         # Assume open field
         # From GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
@@ -215,7 +213,10 @@ class AntennaSimulator:
 
         localNoiseEffect = correction(jammer)
 
-        pseudorange = range + bias_difference + tropospheric_delay + scipy.constants.c * ionospheric_delay + multipath_bias + epsilon + localNoiseEffect
+        pseudorange = (
+            range + bias_difference + tropospheric_delay + scipy.constants.c * ionospheric_delay
+            + multipath_bias + epsilon + localNoiseEffect
+        )
 
         return pseudorange
 
