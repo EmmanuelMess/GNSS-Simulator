@@ -31,7 +31,7 @@ class GpsSatellite:
         for _ in range(10):
             transmission_satellite_position_ecef, _ = self.position_velocity(arrival_gps_time - Unit.Second * dt)
             pseudorange = np.linalg.norm(receiver_position_ecef - transmission_satellite_position_ecef)
-            error = np.abs(pseudorange / scipy.constants.c - dt) * scipy.constants.c
+            error = np.abs(pseudorange - dt * scipy.constants.c)
 
             if error < tolerance:
                 break
