@@ -23,7 +23,7 @@ class RinexGenerator:
         # TODO make it auto close the files
 
         # TODO check if the week number starts at 0
-        file_name = f"{utc_start.strftime('%Y%m%d%H%M%S')}.{utc_start.day_of_year() // DAYS_IN_WEEK}"
+        file_name = f"{utc_start.strftime('%Y%m%d%H%M%S')}.{int(utc_start.day_of_year() // DAYS_IN_WEEK)}"
 
         self.navigation_file = open(os.path.join(folder, f"{file_name}P"), "w") #TODO fix name
         self.observations_file = open(os.path.join(folder, f"{file_name}O"), "w") #TODO fix name
@@ -73,8 +73,8 @@ class RinexGenerator:
         self.observations_file.write(f"                                                            ANT # / TYPE        \n") # TODO add info
         self.observations_file.write(f" {position_x: >13} {position_y: >13} {position_z: >13}                  APPROX POSITION XYZ \n")
         self.observations_file.write(f"        0.0000        0.0000        0.0000                  ANTENNA: DELTA H/E/N\n") # TODO know what these are
-        self.observations_file.write(f"G    3 C1C  D1C  S1C                                        SYS / # / OBS TYPES \n")
-        self.observations_file.write(f" {start_timestamp_str: <26}     GPS         TIME OF FIRST OBS   \n")
+        self.observations_file.write(f"G    3 C1C D1C S1C                                          SYS / # / OBS TYPES \n")
+        self.observations_file.write(f" {start_timestamp_str: <26}            GPS         TIME OF FIRST OBS   \n")
         self.observations_file.write(f"G                                                           SYS / PHASE SHIFT   \n")
         self.observations_file.write(f"  0                                                         GLONASS SLOT / FRQ #\n")
         self.observations_file.write(f"                                                            GLONASS COD/PHS/BIS \n") # TODO check this is valid
@@ -151,4 +151,4 @@ class RinexGenerator:
             doppler_str = f"{doppler:.3f}"
             signal_strength_str = f"{54.0: 2.3f}" # in dbHz see 5.7 of RINEX v3.03 # TODO use actual noise data here
             # TODO add strength for each field in ratio with actual data
-            self.observations_file.write(f"G{prn:>2} {pseudorange_str:>13}   {doppler_str:>13}   {signal_strength_str:>13}\n")
+            self.observations_file.write(f"G{prn:>2} {pseudorange_str:>13}  {doppler_str:>13}  {signal_strength_str:>13}\n")

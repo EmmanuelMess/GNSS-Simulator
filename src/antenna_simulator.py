@@ -1,7 +1,8 @@
 import numpy as np
 import scipy
 
-from src.conversions import ecef2llh, rad2semicircles, ecef2aer, semicircles2rad, seconds2day_of_year
+from src.conversions import (ecef2llh, rad2semicircles, ecef2aer, semicircles2rad, seconds2day_of_year,
+                             position_ecef2eci, velocity_ecef2eci, velocity_eci2ecef)
 from src.constants import GPS_L1_FREQUENCY, OMEGA_EARTH
 
 
@@ -22,13 +23,13 @@ class AntennaSimulator:
         self.noise_effect_rate = noise_effect_rate
         self.tropospheric_cutoff_angle = tropospheric_cutoff_angle
 
-    def _ionospheric_delay_calculation(self, satellite_positions_ecef, receiver_ecef, time_of_week_gps_seconds):
+    def _ionospheric_delay_calculation(self, satellite_positions_eci, receiver_ecef, time_of_week_gps_seconds):
         # From https://gssc.esa.int/navipedia/index.php/Klobuchar_Ionospheric_Model
         # And GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
         # Reference implementation https://geodesy.noaa.gov/gps-toolbox/ovstedal/klobuchar.for
 
         receiver_llh = ecef2llh(receiver_ecef)
-        satellites_aer_rad = np.array([ecef2aer(receiver_ecef, satellite_position) for satellite_position in satellite_positions_ecef])
+        satellites_aer_rad = np.array([ecef2aer(receiver_ecef, satellite_position) for satellite_position in satellite_positions_eci])
 
         if receiver_llh[1] < 0:
             receiver_llh[1] += 2 * np.pi # because for some reason the algorithm uses longitude in [0, 2*pi]
@@ -155,12 +156,12 @@ class AntennaSimulator:
 
         return (delay_dry + delay_wet) * elevation_effect
 
-    def _tropospheric_delay_calculation(self, satellite_positions_ecef, position_ecef, day_of_year):
+    def _tropospheric_delay_calculation(self, satellite_positions_eci, receiver_position_ecef, day_of_year):
         # Troposferic delay is divided intro dry and wet and varies acording to satellite elevation (Saastamoinen model)
         # And Global Positioning System: Signals, Measurements, and Performance section 5.3.3
 
-        position_llh = ecef2llh(position_ecef)
-        satellites_aer = np.array([ecef2aer(position_ecef, satellite_position) for satellite_position in satellite_positions_ecef])
+        position_llh = ecef2llh(receiver_position_ecef)
+        satellites_aer = np.array([ecef2aer(receiver_position_ecef, satellite_position) for satellite_position in satellite_positions_eci])
 
         tropospheric_delay = np.array([self._per_satelite_tropospheric_delay(position_llh, elevation, day_of_year) for elevation in satellites_aer[:, 1]])
         return tropospheric_delay
@@ -175,20 +176,22 @@ class AntennaSimulator:
 
         return dry_delay, wet_delay
 
-    def get_pseudoranges(self, satellite_positions_ecef, receiver_position_ecef, reciever_clock_bias, time_of_week_gps_seconds: np.float64):
+    def get_pseudoranges(self, satellite_positions_eci, receiver_position_ecef, reciever_clock_bias, time_of_week_gps_seconds: np.float64):
 
-        satellite_amount = satellite_positions_ecef.shape[0]
+        satellite_amount = satellite_positions_eci.shape[0]
+
+        receiver_position_eci = position_ecef2eci(receiver_position_ecef, np.float64(0.0))
 
         # TODO compute the receiver clock time
-        ionospheric_delay = self._ionospheric_delay_calculation(satellite_positions_ecef, receiver_position_ecef,
+        ionospheric_delay = self._ionospheric_delay_calculation(satellite_positions_eci, receiver_position_ecef,
                                                                 time_of_week_gps_seconds)
 
         day_of_year = seconds2day_of_year(time_of_week_gps_seconds)
-        tropospheric_delay = self._tropospheric_delay_calculation(satellite_positions_ecef, receiver_position_ecef, day_of_year)
+        tropospheric_delay = self._tropospheric_delay_calculation(satellite_positions_eci, receiver_position_ecef, day_of_year)
 
         # See GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
         bias_difference = scipy.constants.c * (reciever_clock_bias - self.satellite_clock_bias.reshape((-1)))
-        range = np.linalg.norm(satellite_positions_ecef - receiver_position_ecef, axis=1).reshape((-1))
+        range = np.linalg.norm(satellite_positions_eci - receiver_position_eci, axis=1).reshape((-1))
 
         # Assume open field
         # From GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
@@ -220,16 +223,19 @@ class AntennaSimulator:
 
         return pseudorange
 
-    def get_doppler(self, satellite_positions_ecef, satellite_velocities_ecef, player_position, player_velocity,
+    def get_doppler(self, satellite_positions_eci, satellite_velocities_eci, receiver_position_ecef, receiver_velocity_ecef,
                     receiver_clock_drift):
         # Doppler effect simulation
         # From GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.2
-        satellite_amount = satellite_positions_ecef.shape[0]
+        satellite_amount = satellite_positions_eci.shape[0]
+        receiver_position_eci = position_ecef2eci(receiver_position_ecef, np.float64(0.0))
+        receiver_velocity_eci = velocity_ecef2eci(receiver_position_ecef, receiver_velocity_ecef, np.float64(0.0))
 
-        velocity_difference = player_velocity - satellite_velocities_ecef
-        satellite_user_delta = satellite_positions_ecef - player_position
+        # For the velocity difference, do not take into account Earth rotation
+        velocity_difference_eci = receiver_velocity_eci - satellite_velocities_eci
+        satellite_user_delta = satellite_positions_eci - receiver_position_eci
         satellite_line_of_sight = satellite_user_delta / np.linalg.norm(satellite_user_delta, axis=1).reshape((-1, 1))
-        velocity_scalar_projection = np.sum(velocity_difference * satellite_line_of_sight, axis=1)
+        velocity_scalar_projection = np.sum(velocity_difference_eci * satellite_line_of_sight, axis=1)
         velocity_base = velocity_scalar_projection * (self.satellite_frequency / scipy.constants.c)
         doppler_contribution_clock = receiver_clock_drift * (self.satellite_frequency / scipy.constants.c)
         epsilon = self.rng.normal(0.0, self.satellite_noise_std, (satellite_amount,))
@@ -240,14 +246,14 @@ class AntennaSimulator:
         direct_doppler = velocity_base + doppler_contribution_clock + epsilon
         return direct_doppler
 
-    def get_dilution_of_presition(self, satellite_positions_ecef,  player_position):
-        satellite_amount = satellite_positions_ecef.shape[0]
+    def get_dilution_of_presition(self, satellite_positions_eci, player_position):
+        satellite_amount = satellite_positions_eci.shape[0]
         # TODO add tropospheric and ionospheric factors, as well as signal noise
 
         A = np.concatenate(
             (
-                (satellite_positions_ecef - player_position) / np.linalg.norm(satellite_positions_ecef - player_position,
-                                                                         axis=1).reshape(
+                (satellite_positions_eci - player_position) / np.linalg.norm(satellite_positions_eci - player_position,
+                                                                             axis=1).reshape(
                     (-1, 1)),
                 np.ones((1, satellite_amount)).T),
             axis=1

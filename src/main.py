@@ -52,9 +52,10 @@ SIMULATION_ROSARIO = {
     "jammer_noise": np.float64(0.0) # dB
 }
 
+MARGIN_PX = np.array([100, 100, 0], dtype=np.int64)
 PIXELS_TO_METERS = 1/10
 METERS_TO_PIXELS = 1/PIXELS_TO_METERS
-MOVEMENT_SPEED_METERS_PER_SECOND = 0.2
+MOVEMENT_SPEED_METERS_PER_SECOND = 1.0
 SKYPLOT_SIZE = 200
 
 GNSS_MESSAGE_FREQUENCY = 5 # Hz
@@ -186,26 +187,26 @@ def main():
         player_velocity = MOVEMENT_SPEED_METERS_PER_SECOND * player_delta
         player_velocities.append(player_velocity)
 
-        satellite_positions_velocities = np.array([satellite.position_velocity_for_receiver(player_position, time_gps)[1] for satellite in cut_satellite_orbits], dtype=np.float64)
-        satellite_positions = satellite_positions_velocities[:, 0, :]
-        satellite_velocities = satellite_positions_velocities[:, 1, :]
+        satellite_positions_velocities_eci = np.array([satellite.position_velocity_for_receiver(player_position, time_gps)[1] for satellite in cut_satellite_orbits], dtype=np.float64)
+        satellite_positions_eci = satellite_positions_velocities_eci[:, 0, :]
+        satellite_velocities_eci = satellite_positions_velocities_eci[:, 1, :]
 
         if time_since_gnss > 1/GNSS_MESSAGE_FREQUENCY:
             # See GNSS Applications and Methods (GNSS Technology and Applications) section 3.3.1.1
             if time_since_gnss < np.inf:
                 receiver_clock_bias += RECEIVER_CLOCK_WALK * rng.normal() * time_since_gnss
 
-            gnss_position, gnss_velocity, _, _ = sensor.update(satellite_positions, satellite_velocities,
+            gnss_position, gnss_velocity, _, _ = sensor.update(satellite_positions_eci, satellite_velocities_eci,
                                                                player_positions, player_velocities, receiver_clock_bias,
                                                                RECEIVER_CLOCK_WALK, time_gps, time_utc)
             gnss_positions.append(gnss_position)
             gnss_velocities.append(gnss_velocity)
             time_since_gnss = 0
 
-        player_position_px = (player_position - start_receiver_position) * METERS_TO_PIXELS
+        player_position_px = (player_position - start_receiver_position) * METERS_TO_PIXELS + MARGIN_PX
         gnss_velocity_px = gnss_velocities[-1] / MOVEMENT_SPEED_METERS_PER_SECOND * METERS_TO_PIXELS
 
-        skyplot = get_skyplot(player_position, satellite_positions, satellite_prns, SKYPLOT_SIZE, SKYPLOT_SIZE, np.deg2rad(10))
+        skyplot = get_skyplot(player_position, satellite_positions_eci, satellite_prns, SKYPLOT_SIZE, SKYPLOT_SIZE, np.deg2rad(10))
 
         class _draw:
             begin_drawing()
@@ -215,7 +216,7 @@ def main():
             draw_circle_v(toVector2(player_position_px, e_axis, s_axis), 5, RED)
 
             for gnss_position in gnss_positions:
-                draw_circle_v(toVector2((gnss_position - start_receiver_position) * METERS_TO_PIXELS, e_axis, s_axis), 2, GREEN)
+                draw_circle_v(toVector2((gnss_position - start_receiver_position) * METERS_TO_PIXELS + MARGIN_PX, e_axis, s_axis), 2, GREEN)
 
             draw_line_v(toVector2(player_position_px, e_axis, s_axis), toVector2(player_position_px + gnss_velocity_px, e_axis, s_axis), BLUE)
 

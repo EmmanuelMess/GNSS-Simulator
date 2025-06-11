@@ -5,6 +5,7 @@ import scipy
 from hifitime import *
 
 from src import gps_orbital_parameters
+from src.constants import OMEGA_EARTH
 from src.gps_orbital_parameters import GpsOrbitalParameters
 from src.gps_satellite import GpsSatellite
 from tests.constants import DISTANCE_PRECISION, WSG84_SEMI_MAJOR_AXIS, TIME_PRECISION
@@ -161,16 +162,26 @@ G03 2025 01 01 08 00 00 6.371350027621D-04 7.958078640513D-12 0.000000000000D+00
         arrival_gps_time = Epoch.init_from_gregorian(2025, 1, 1, 9, 0, 0, 0, TimeScale.GPST)
         receiver_position_ecef = np.array([WSG84_SEMI_MAJOR_AXIS, 0, 0], dtype=np.float64)
 
-        (position_at_arrival, velocity_at_arrival) = satellite.position_velocity(arrival_gps_time)
-        transmission_gps_time, (position_at_transmission, velocity_at_transmission) = satellite.position_velocity_for_receiver(
+        position_at_arrival_ecef, _ = satellite.position_velocity(arrival_gps_time)
+        dt, (position_at_transmission_ecef, _) = satellite.position_velocity_for_receiver(
             receiver_position_ecef, arrival_gps_time, DISTANCE_PRECISION
         )
 
-        range = np.linalg.norm(receiver_position_ecef - position_at_transmission)
-        dt = arrival_gps_time.to_gpst_nanoseconds() - transmission_gps_time.to_gpst_nanoseconds()
+        theta = OMEGA_EARTH * dt
 
-        self.assertNotAlmostEqual(np.linalg.norm(position_at_arrival - position_at_transmission), 0.0, delta=5.0)
-        self.assertAlmostEqual(range / scipy.constants.c * 1e+9, dt, delta=1)
+        earth_rotation = np.array([
+            [np.cos(theta), -np.sin(theta), 0],
+            [np.sin(theta),  np.cos(theta), 0],
+            [0, 0, 1],
+        ])
+
+        position_at_transmission_eci = earth_rotation @ position_at_transmission_ecef
+
+        range = np.linalg.norm(receiver_position_ecef - position_at_transmission_eci)
+
+        self.assertNotAlmostEqual(np.linalg.norm(position_at_arrival_ecef - position_at_transmission_ecef), 0.0, delta=5.0)
+        self.assertNotAlmostEqual(np.linalg.norm(receiver_position_ecef - position_at_transmission_ecef) / scipy.constants.c, dt, delta=10e-9)
+        self.assertAlmostEqual(range / scipy.constants.c, dt, delta=1)
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,6 +1,7 @@
 import numpy as np
 from pyray import Vector2
 
+from src.constants import OMEGA_EARTH
 from src.numpy_types import array3d
 
 DAYS_IN_WEEK = np.int64(7)
@@ -87,6 +88,51 @@ def ecef2aer(receiver_ecef: array3d, satellite_ecef: array3d):
     range = np.linalg.norm(delta)
 
     return np.array([azimuth, elevation, range])
+
+def position_ecef2eci(position_ecef: np.ndarray, dt: np.float64) -> array3d:
+    # ECEF to ECI provided by IS-GPS-200N section 20.3.3.4.3.3.2
+    theta = OMEGA_EARTH * dt
+    rotation_matrix = np.array([
+        [np.cos(theta), -np.sin(theta), 0],
+        [np.sin(theta), np.cos(theta), 0],
+        [0, 0, 1],
+    ], dtype=np.float64)
+    return (rotation_matrix @ position_ecef.reshape((-1, 3, 1))).reshape(position_ecef.shape)
+
+def velocity_ecef2eci(position_ecef: np.ndarray, velocity_ecef: np.ndarray, dt: np.float64) -> array3d:
+    # ECEF to ECI provided from Principles of GNSS, Inertial, and Multisensor Integrated Navigation Systems section 2.5.1
+    angular_velocity_matrix = np.array([
+        [0, - OMEGA_EARTH, 0],
+        [OMEGA_EARTH, 0, 0],
+        [0, 0, 0]
+    ])
+
+    velocity_of_position = (angular_velocity_matrix @ position_ecef.reshape((-1, 3, 1))).reshape(position_ecef.shape)
+    velocity_eci = position_ecef2eci(velocity_ecef + velocity_of_position, dt)
+    return velocity_eci
+
+def position_eci2ecef(positions_eci: np.ndarray, dt: np.float64) -> array3d:
+    # TODO test
+    # ECI to ECEF provided from Principles of GNSS, Inertial, and Multisensor Integrated Navigation Systems section 2.5.1
+    theta = OMEGA_EARTH * dt
+    rotation_matrix = np.array([
+        [np.cos(theta), np.sin(theta), 0],
+        [-np.sin(theta), np.cos(theta), 0],
+        [0, 0, 1],
+    ], dtype=np.float64)
+    return (rotation_matrix @ positions_eci.reshape((-1, 3, 1))).reshape(positions_eci.shape)
+
+def velocity_eci2ecef(positions_eci: np.ndarray, velocities_eci: np.ndarray, dt: np.float64) -> array3d:
+    # TODO test
+    # ECI to ECEF provided from Principles of GNSS, Inertial, and Multisensor Integrated Navigation Systems section 2.5.1
+    angular_velocity_matrix = np.array([
+        [0, - OMEGA_EARTH, 0],
+        [OMEGA_EARTH, 0, 0],
+        [0, 0, 0]
+    ])
+    velocity_of_position = (angular_velocity_matrix @ positions_eci.reshape((-1, 3, 1))).reshape(positions_eci.shape)
+    velocity_ecef = position_eci2ecef(velocities_eci - velocity_of_position, dt)
+    return velocity_ecef
 
 
 def pos2enu_base(position_llh: array3d) -> (array3d, array3d, array3d):
