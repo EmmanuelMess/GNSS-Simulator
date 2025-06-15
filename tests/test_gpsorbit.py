@@ -3,6 +3,7 @@ import unittest
 import numpy as np
 import scipy
 from hifitime import *
+from hifitime import Epoch, Unit
 
 from src import gps_orbital_parameters
 from src.constants import OMEGA_EARTH
@@ -163,25 +164,17 @@ G03 2025 01 01 08 00 00 6.371350027621D-04 7.958078640513D-12 0.000000000000D+00
         receiver_position_ecef = np.array([WSG84_SEMI_MAJOR_AXIS, 0, 0], dtype=np.float64)
 
         position_at_arrival_ecef, _ = satellite.position_velocity(arrival_gps_time)
-        dt, (position_at_transmission_ecef, _) = satellite.position_velocity_for_receiver(
+        dt, (position_at_transmission_eci, _) = satellite.position_velocity_for_receiver(
             receiver_position_ecef, arrival_gps_time, DISTANCE_PRECISION
         )
 
-        theta = OMEGA_EARTH * dt
-
-        earth_rotation = np.array([
-            [np.cos(theta), -np.sin(theta), 0],
-            [np.sin(theta),  np.cos(theta), 0],
-            [0, 0, 1],
-        ])
-
-        position_at_transmission_eci = earth_rotation @ position_at_transmission_ecef
+        position_at_transmission_ecef, _ = satellite.position_velocity(arrival_gps_time - Unit.Second * dt)
 
         range = np.linalg.norm(receiver_position_ecef - position_at_transmission_eci)
 
-        self.assertNotAlmostEqual(np.linalg.norm(position_at_arrival_ecef - position_at_transmission_ecef), 0.0, delta=5.0)
+        self.assertNotAlmostEqual(np.linalg.norm(position_at_arrival_ecef - position_at_transmission_eci), 0.0, delta=5.0)
         self.assertNotAlmostEqual(np.linalg.norm(receiver_position_ecef - position_at_transmission_ecef) / scipy.constants.c, dt, delta=10e-9)
-        self.assertAlmostEqual(range / scipy.constants.c, dt, delta=1)
+        self.assertAlmostEqual(-range / scipy.constants.c, dt, delta=0.1e-9)
 
 if __name__ == '__main__':
     unittest.main()

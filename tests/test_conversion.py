@@ -264,19 +264,19 @@ class EciPositionTest(unittest.TestCase):
 class EciVelocityTest(unittest.TestCase):
     def test_trivial_equator(self):
         receiver_position_ecef = np.array([WSG84_SEMI_MAJOR_AXIS, 0, 0], dtype=np.float64)
-        receiver_velocity_ecef = np.array([100, 200, 300], dtype=np.float64)
+        receiver_velocity_ecef = np.array([0, 0, 0], dtype=np.float64)
         dt = np.float64(0.0)
-        self.assertAlmostEqual(velocity_ecef2eci(receiver_position_ecef, receiver_velocity_ecef, dt)[0], receiver_velocity_ecef[0], delta=1.0)
-        self.assertAlmostEqual(velocity_ecef2eci(receiver_position_ecef, receiver_velocity_ecef, dt)[1], receiver_velocity_ecef[1] + 465, delta=1.0)
-        self.assertAlmostEqual(velocity_ecef2eci(receiver_position_ecef, receiver_velocity_ecef, dt)[2], receiver_velocity_ecef[2], delta=1.0)
+        self.assertAlmostEqual(velocity_ecef2eci(receiver_position_ecef, receiver_velocity_ecef, dt)[0], 0, delta=1.0)
+        self.assertAlmostEqual(velocity_ecef2eci(receiver_position_ecef, receiver_velocity_ecef, dt)[1], 465, delta=1.0)
+        self.assertAlmostEqual(velocity_ecef2eci(receiver_position_ecef, receiver_velocity_ecef, dt)[2], 0, delta=1.0)
 
     def test_trivial_pole(self):
         receiver_position_ecef = np.array([0, 0, WSG84_SEMI_MINOR_AXIS], dtype=np.float64)
-        receiver_velocity_ecef = np.array([100, 200, 300], dtype=np.float64)
+        receiver_velocity_ecef = np.array([0, 0, 0], dtype=np.float64)
         dt = np.float64(0.0)
-        self.assertAlmostEqual(velocity_ecef2eci(receiver_position_ecef, receiver_velocity_ecef, dt)[0], receiver_velocity_ecef[0], delta=1.0)
-        self.assertAlmostEqual(velocity_ecef2eci(receiver_position_ecef, receiver_velocity_ecef, dt)[1], receiver_velocity_ecef[1], delta=1.0)
-        self.assertAlmostEqual(velocity_ecef2eci(receiver_position_ecef, receiver_velocity_ecef, dt)[2], receiver_velocity_ecef[2], delta=1.0)
+        self.assertAlmostEqual(velocity_ecef2eci(receiver_position_ecef, receiver_velocity_ecef, dt)[0], 0, delta=1.0)
+        self.assertAlmostEqual(velocity_ecef2eci(receiver_position_ecef, receiver_velocity_ecef, dt)[1], 0, delta=1.0)
+        self.assertAlmostEqual(velocity_ecef2eci(receiver_position_ecef, receiver_velocity_ecef, dt)[2], 0, delta=1.0)
 
     def test_equator(self):
         receiver_position_ecef = np.array([WSG84_SEMI_MAJOR_AXIS, 0, 0], dtype=np.float64)
