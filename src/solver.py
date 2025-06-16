@@ -1,6 +1,8 @@
 import numpy as np
 import scipy
 
+from src.conversions import velocity_eci2ecef
+
 
 class Solver:
     def __init__(self, satellite_clock_bias, satellite_frequencies):
@@ -90,18 +92,18 @@ class Solver:
 
         return gnss_position_aproximation, gnss_receiver_clock_bias_approximation, gnss_position_error
 
-    def solve_velocity(self, satellite_positions_ecef, satellite_velocities_ecef, direct_doppler, receiver_position,
+    def solve_velocity(self, satellite_positions_eci, satellite_velocities_eci, direct_doppler, receiver_position_ecef,
                        xtol):
         """
         A linearization of the pseudorange rate error, and least squares solutions
         From Global Positioning System section 6.2.1, adapted from getGnssPositionTaylor
         """
         # TODO add satelite weighting
-        satellite_amount = satellite_positions_ecef.shape[0]
+        satellite_amount = satellite_positions_eci.shape[0]
 
         pseudorange_rates = scipy.constants.c / self.satellite_frequencies * direct_doppler
 
-        gnss_velocity_aproximation = np.array([1, 1, 1], dtype=np.float64)
+        gnss_velocity_eci_aproximation = np.array([1, 1, 1], dtype=np.float64)
         gnss_receiver_clock_drift_approximation = np.float64(1e-6)
         gnss_velocity_error = np.inf
 
@@ -111,8 +113,8 @@ class Solver:
             if gnss_velocity_error < xtol:
                 break
 
-            velocity_difference = gnss_velocity_aproximation - satellite_velocities_ecef
-            satellite_user_delta = satellite_positions_ecef - receiver_position
+            velocity_difference = gnss_velocity_eci_aproximation - satellite_velocities_eci
+            satellite_user_delta = satellite_positions_eci - receiver_position_ecef
             satellite_line_of_sight = satellite_user_delta / np.linalg.norm(satellite_user_delta, axis=1).reshape((-1, 1))
             velocity_scalar_projection = np.sum(velocity_difference * satellite_line_of_sight, axis=1)
             pseudorange_rates_approximation = velocity_scalar_projection + gnss_receiver_clock_drift_approximation
@@ -127,12 +129,15 @@ class Solver:
             gnss_velocity_delta = m[:3]
             gnss_clock_drift_delta = m[-1]
 
-            gnss_velocity_aproximation += gnss_velocity_delta
+            gnss_velocity_eci_aproximation += gnss_velocity_delta
             gnss_receiver_clock_drift_approximation += gnss_clock_drift_delta
 
             gnss_velocity_error = np.linalg.norm(gnss_velocity_delta)
 
-        return gnss_velocity_aproximation, gnss_receiver_clock_drift_approximation, gnss_velocity_error
+        receiver_position_eci = receiver_position_ecef
+        gnss_velocity_ecef_aproximation = velocity_eci2ecef(receiver_position_eci, gnss_velocity_eci_aproximation, 0.0)
+
+        return gnss_velocity_ecef_aproximation, gnss_receiver_clock_drift_approximation, gnss_velocity_error
 
 
     def solve_velocity_scipy(self, satellite_positions_ecef, satellite_velocities_ecef, direct_doppler, receiver_position, xtol):
