@@ -202,19 +202,7 @@ class AntennaSimulator:
         epsilon = self.rng.normal(0.0, self.satellite_noise_std, (satellite_amount,))
 
         # Noise from sources local to the antenna, helps to model interference
-        # Extrapolated from GNSS interference mitigation: A measurement and position domain assessment
-        jammer = self.rng.normal(self.jammer_noise, 0.1)  # dB
-
-        def correction(noiseLevel):
-            if noiseLevel <= self.noise_correction_level:
-                return 0
-            if self.noise_correction_level < noiseLevel < self.noise_fix_loss_level:
-                return noiseLevel * self.noise_effect_rate
-            if self.noise_fix_loss_level <= noiseLevel:
-                print("Too much noise")
-                return None
-
-        localNoiseEffect = correction(jammer)
+        localNoiseEffect = self.rng.normal(self.jammer_noise, 10, (satellite_amount,))  # m
 
         pseudorange = (
             range + bias_difference + tropospheric_delay + scipy.constants.c * ionospheric_delay
